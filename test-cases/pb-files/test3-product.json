@@ -1,0 +1,24 @@
+{
+  "payload": {
+    "id": 9001,
+    "name": "MacBook Pro",
+    "description": "高性能笔记本电脑",
+    "price": 12999.99,
+    "tags": [
+      "电子产品",
+      "电脑",
+      "Apple"
+    ]
+  },
+  "decoded": {
+    "id": 9001,
+    "name": "MacBook Pro",
+    "description": "高性能笔记本电脑",
+    "price": 12999.990234375,
+    "tags": [
+      "电子产品",
+      "电脑",
+      "Apple"
+    ]
+  }
+}

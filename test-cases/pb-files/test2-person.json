@@ -1,0 +1,30 @@
+{
+  "payload": {
+    "id": 1001,
+    "name": "李四",
+    "address": {
+      "street": "中关村大街1号",
+      "city": "北京",
+      "country": "中国",
+      "zipCode": "100080"
+    },
+    "phoneNumbers": [
+      "13800138000",
+      "010-12345678"
+    ]
+  },
+  "decoded": {
+    "id": 1001,
+    "name": "李四",
+    "address": {
+      "street": "中关村大街1号",
+      "city": "北京",
+      "country": "中国",
+      "zipCode": "100080"
+    },
+    "phoneNumbers": [
+      "13800138000",
+      "010-12345678"
+    ]
+  }
+}

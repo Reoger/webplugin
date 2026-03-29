@@ -1,0 +1,15 @@
+
+syntax = "proto3";
+
+package test;
+
+message EdgeCases {
+  int64 max_int = 1;
+  uint64 max_uint = 2;
+  double max_double = 3;
+  string empty_string = 4;
+  string unicode_string = 5;
+  repeated int32 empty_array = 6;
+  bytes binary_data = 7;
+  bool false_value = 8;
+}
