@@ -90,6 +90,9 @@
         // 结果相关元素
         elements.resultTabs = document.querySelector('.result-tabs');
         elements.resultContent = document.getElementById('result-content');
+        elements.resultOutput = document.getElementById('result-content');
+        elements.resultInfo = document.createElement('div');
+        elements.resultInfo.className = 'result-info';
         elements.debugContent = document.getElementById('debug-content');
         elements.rawContent = document.getElementById('raw-content');
         elements.copyResultBtn = document.getElementById('copy-result-btn');
@@ -644,12 +647,197 @@
       });
     }
 
+    // Protobuf to JSON parsing function
+    async function parseProtoToJson(data) {
+      if (!state.selectedSchema) {
+        throw new Error('请先选择 Schema');
+      }
+
+      try {
+        let buffer;
+
+        // 处理不同的输入类型
+        if (state.inputType === 'file') {
+          buffer = new Uint8Array(data);
+        } else {
+          // 文本输入 - 先尝试 base64
+          const text = data.trim();
+          try {
+            const binaryString = atob(text);
+            buffer = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              buffer[i] = binaryString.charCodeAt(i);
+            }
+          } catch (e) {
+            // 不是 base64，尝试直接二进制
+            buffer = new TextEncoder().encode(text);
+          }
+        }
+
+        // 从 schema 获取所有消息类型
+        const root = protobuf.parse(state.selectedSchema.content);
+        const messageTypes = root.root.nested;
+        if (!messageTypes || Object.keys(messageTypes).length === 0) {
+          throw new Error('Schema 中没有定义消息类型');
+        }
+
+        // 尝试每个消息类型直到成功
+        let decoded = null;
+        let usedType = null;
+
+        for (const [typeName, type] of Object.entries(messageTypes)) {
+          try {
+            decoded = type.decode(buffer);
+            usedType = typeName;
+            break;
+          } catch (e) {
+            // 尝试下一个类型
+            continue;
+          }
+        }
+
+        if (!decoded) {
+          throw new Error('无法使用 Schema 中的任何消息类型解析数据');
+        }
+
+        // 转换为纯对象
+        const json = type.toObject(decoded, {
+          longs: String,
+          enums: String,
+          bytes: String,
+        });
+
+        return {
+          success: true,
+          messageType: usedType,
+          data: json
+        };
+      } catch (error) {
+        console.error('Parse error:', error);
+        throw new Error(`解析失败: ${error.message}`);
+      }
+    }
+
+    // Display JSON result
+    function displayJsonResult(data, messageType) {
+      const json = JSON.stringify(data, null, 2);
+
+      // Show result section
+      elements.resultSection.style.display = 'block';
+
+      // Create result info
+      const resultInfo = document.createElement('div');
+      resultInfo.className = 'result-info';
+      resultInfo.innerHTML = `
+        消息类型: <strong>${escapeHtml(messageType)}</strong><br>
+        数据大小: ${formatBytes(new Blob([json]).size)}
+      `;
+
+      // 简单的语法高亮
+      const highlighted = highlightJson(json);
+
+      // Update result content
+      elements.resultContent.innerHTML = '';
+      elements.resultContent.appendChild(resultInfo);
+      elements.resultContent.innerHTML += `<pre class="json-output">${highlighted}</pre>`;
+
+      state.parsedData = data;
+    }
+
+    // JSON syntax highlighting
+    function highlightJson(json) {
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'number';
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'key';
+          } else {
+            cls = 'string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'boolean';
+        } else if (/null/.test(match)) {
+          cls = 'null';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+      });
+    }
+
+    // Setup conversion listeners
+    function setupConversionListeners() {
+      elements.processBtn.addEventListener('click', async () => {
+        if (!state.selectedSchema) {
+          showToast('请先选择 Schema', 'warning');
+          return;
+        }
+
+        if (!state.inputData) {
+          showToast('请输入或上传数据', 'warning');
+          return;
+        }
+
+        elements.processBtn.disabled = true;
+        const originalText = elements.processBtn.innerHTML;
+        elements.processBtn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">处理中...</span>';
+
+        try {
+          let result;
+
+          if (state.currentMode === 'parse') {
+            result = await parseProtoToJson(state.inputData);
+            displayJsonResult(result.data, result.messageType);
+            showToast('解析成功', 'success');
+          } else {
+            // encode模式 - 下一任务实现
+            showToast('编码功能将在下一任务实现', 'warning');
+          }
+        } catch (error) {
+          console.error('Conversion error:', error);
+          showToast(error.message, 'error');
+          elements.resultSection.classList.add('hidden');
+        } finally {
+          elements.processBtn.disabled = false;
+          elements.processBtn.innerHTML = originalText;
+        }
+      });
+
+      // 复制按钮
+      if (elements.copyResultBtn) {
+        elements.copyResultBtn.addEventListener('click', () => {
+          const text = elements.resultContent.textContent;
+          navigator.clipboard.writeText(text).then(() => {
+            showToast('已复制到剪贴板', 'success');
+          }).catch(() => {
+            showToast('复制失败', 'error');
+          });
+        });
+      }
+
+      // 下载按钮
+      if (elements.downloadResultBtn) {
+        elements.downloadResultBtn.addEventListener('click', () => {
+          const text = elements.resultContent.textContent;
+          const blob = new Blob([text], {
+            type: state.currentMode === 'parse' ? 'application/json' : 'application/octet-stream'
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `pb-converter-${state.currentMode}-${Date.now()}${state.currentMode === 'parse' ? '.json' : '.pb'}`;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('下载已开始', 'success');
+        });
+      }
+    }
+
     // 基础初始化函数
     function init() {
         initElements();
         setupSchemaEventListeners();
         setupModeEventListeners();
         setupFileUploadListeners();
+        setupConversionListeners();
         setupSchemaListEventListeners();
         loadSchemas();
         switchMode('parse');
