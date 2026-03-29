@@ -1,0 +1,16 @@
+{
+  "name": "pb-converter-extension",
+  "version": "1.0.0",
+  "description": "Protocol Buffer 双向转换器浏览器插件",
+  "scripts": {
+    "test": "echo \"Error: no test specified\""
+  },
+  "keywords": [
+    "protobuf",
+    "chrome-extension",
+    "json",
+    "converter"
+  ],
+  "author": "",
+  "license": "MIT"
+}

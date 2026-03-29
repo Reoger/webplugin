@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "PB Converter - Protocol Buffer 双向转换器",
+  "version": "1.0.0",
+  "description": "支持 pb ↔ JSON 双向转换的开发工具，保护隐私，数据不上传服务器",
+  "permissions": [
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
