@@ -718,6 +718,74 @@
       }
     }
 
+    // JSON to Protobuf encoding function
+    async function encodeJsonToProto(data) {
+      if (!state.selectedSchema) {
+        throw new Error('请先选择 Schema');
+      }
+
+      try {
+        let jsonData;
+
+        // 处理不同的输入类型
+        if (state.inputType === 'file') {
+          const text = new TextDecoder().decode(data);
+          jsonData = JSON.parse(text);
+        } else {
+          jsonData = JSON.parse(data.trim());
+        }
+
+        // 从 schema 获取消息类型
+        const root = protobuf.parse(state.selectedSchema.content);
+        const messageTypes = root.root.nested;
+        if (!messageTypes || Object.keys(messageTypes).length === 0) {
+          throw new Error('Schema 中没有定义消息类型');
+        }
+
+        // 尝试验证并编码每个消息类型
+        let buffer = null;
+        let usedType = null;
+        let validationErrors = [];
+
+        for (const [typeName, type] of Object.entries(messageTypes)) {
+          try {
+            // 创建消息实例
+            const message = type.create(jsonData);
+            buffer = type.encode(message).finish();
+            usedType = typeName;
+
+            // 通过解码验证
+            const decoded = type.decode(buffer);
+            const verified = type.verify(decoded);
+            if (verified) {
+              validationErrors.push(`${typeName}: ${verified}`);
+              buffer = null;
+              continue;
+            }
+
+            break;
+          } catch (e) {
+            validationErrors.push(`${typeName}: ${e.message}`);
+            continue;
+          }
+        }
+
+        if (!buffer) {
+          throw new Error(`无法编码数据:\n${validationErrors.join('\n')}`);
+        }
+
+        return {
+          success: true,
+          messageType: usedType,
+          buffer: buffer,
+          base64: btoa(String.fromCharCode.apply(null, buffer))
+        };
+      } catch (error) {
+        console.error('Encode error:', error);
+        throw new Error(`编码失败: ${error.message}`);
+      }
+    }
+
     // Display JSON result
     function displayJsonResult(data, messageType) {
       const json = JSON.stringify(data, null, 2);
@@ -742,6 +810,27 @@
       elements.resultContent.innerHTML += `<pre class="json-output">${highlighted}</pre>`;
 
       state.parsedData = data;
+    }
+
+    // Display encode result
+    function displayEncodeResult(result) {
+      elements.resultInfo.innerHTML = `
+        消息类型: <strong>${escapeHtml(result.messageType)}</strong><br>
+        二进制大小: ${formatBytes(result.buffer.length)}
+      `;
+
+      const displayData = {
+        messageType: result.messageType,
+        sizeBytes: result.buffer.length,
+        base64: result.base64
+      };
+
+      const json = JSON.stringify(displayData, null, 2);
+      const highlighted = highlightJson(json);
+      elements.resultOutput.innerHTML = highlighted;
+      elements.resultSection.classList.remove('hidden');
+
+      state.parsedData = result.buffer;
     }
 
     // JSON syntax highlighting
@@ -788,8 +877,9 @@
             displayJsonResult(result.data, result.messageType);
             showToast('解析成功', 'success');
           } else {
-            // encode模式 - 下一任务实现
-            showToast('编码功能将在下一任务实现', 'warning');
+            result = await encodeJsonToProto(state.inputData);
+            displayEncodeResult(result);
+            showToast('编码成功', 'success');
           }
         } catch (error) {
           console.error('Conversion error:', error);
@@ -816,16 +906,25 @@
       // 下载按钮
       if (elements.downloadResultBtn) {
         elements.downloadResultBtn.addEventListener('click', () => {
-          const text = elements.resultContent.textContent;
-          const blob = new Blob([text], {
-            type: state.currentMode === 'parse' ? 'application/json' : 'application/octet-stream'
-          });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `pb-converter-${state.currentMode}-${Date.now()}${state.currentMode === 'parse' ? '.json' : '.pb'}`;
-          a.click();
-          URL.revokeObjectURL(url);
+          if (state.currentMode === 'parse') {
+            const text = elements.resultContent.textContent;
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pb-converter-json-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          } else {
+            // 编码模式 - 下载二进制
+            const blob = new Blob([state.parsedData], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pb-converter-pb-${Date.now()}.pb`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }
           showToast('下载已开始', 'success');
         });
       }
