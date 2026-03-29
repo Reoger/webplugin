@@ -388,7 +388,11 @@
                 `;
             }
 
-            state.selectedSchema = schema;
+            // 缓存解析后的 schema root 以供验证使用
+            state.selectedSchema = {
+                ...schema,
+                root: root
+            };
             elements.processBtn.disabled = false;
 
         } catch (error) {
@@ -593,8 +597,38 @@
       if (text) {
         const size = new Blob([text]).size;
         elements.uploadArea.textContent = `文本大小: ${formatBytes(size)}`;
+
+        // 在编码模式验证 JSON
+        if (state.currentMode === 'encode') {
+          const validation = validateJsonInput(text);
+          if (!validation.valid) {
+            elements.uploadArea.textContent = `❌ ${validation.error}`;
+            elements.uploadArea.style.color = 'var(--error-color)';
+            elements.convertBtn.disabled = true;
+            return;
+          }
+
+          // 如果选择了 schema，验证字段
+          if (state.selectedSchema) {
+            const messageTypes = state.selectedSchema.root.nested;
+            const firstType = Object.keys(messageTypes)[0];
+            if (firstType) {
+              const schemaValidation = validateSchemaFields(validation.data, firstType);
+              if (!schemaValidation.valid) {
+                elements.uploadArea.textContent = `❌ ${schemaValidation.errors.join('; ')}`;
+                elements.uploadArea.style.color = 'var(--error-color)';
+                elements.convertBtn.disabled = true;
+                return;
+              }
+            }
+          }
+
+          elements.uploadArea.style.color = 'var(--success-color)';
+          elements.uploadArea.textContent = `✓ JSON 格式正确 (${formatBytes(size)})`;
+        }
       } else {
         elements.uploadArea.innerHTML = '<p>拖拽文件到这里，或点击选择文件</p><p class="upload-subtext">支持 .pb 和 .json 文件</p>';
+        elements.uploadArea.style.color = '';
       }
 
       elements.convertBtn.disabled = !state.selectedSchema || !text;
@@ -606,6 +640,81 @@
       const sizes = ['Bytes', 'KB', 'MB', 'GB'];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    // Validation Functions
+    function validateJsonInput(text) {
+      if (!text || !text.trim()) {
+        return { valid: false, error: '请输入 JSON 数据' };
+      }
+
+      try {
+        const json = JSON.parse(text);
+        return { valid: true, data: json };
+      } catch (error) {
+        const match = error.message.match(/position (\d+)/);
+        const position = match ? parseInt(match[1]) : null;
+
+        if (position !== null) {
+          const lines = text.substring(0, position).split('\n');
+          const line = lines.length;
+          const column = lines[lines.length - 1].length + 1;
+          return {
+            valid: false,
+            error: `JSON 语法错误 (行 ${line}, 列 ${column}): ${error.message}`
+          };
+        }
+
+        return { valid: false, error: `JSON 语法错误: ${error.message}` };
+      }
+    }
+
+    function validateSchemaFields(jsonData, messageType) {
+      const type = state.selectedSchema.root.nested[messageType];
+      if (!type) {
+        return { valid: true }; // 无法验证
+      }
+
+      const fields = type.fields;
+      const errors = [];
+
+      for (const fieldName in jsonData) {
+        if (!fields[fieldName]) {
+          errors.push(`字段 '${fieldName}' 不在 Schema 中定义`);
+          continue;
+        }
+
+        const field = fields[fieldName];
+        const value = jsonData[fieldName];
+        const fieldType = field.type;
+
+        // 类型验证
+        if (fieldType === 'string' && typeof value !== 'string') {
+          errors.push(`字段 '${fieldName}' 类型错误: 期望 string, 实际 ${typeof value}`);
+        } else if (fieldType === 'int32' || fieldType === 'int64') {
+          if (typeof value !== 'number') {
+            errors.push(`字段 '${fieldName}' 类型错误: 期望 number, 实际 ${typeof value}`);
+          }
+        } else if (fieldType === 'bool' && typeof value !== 'boolean') {
+          errors.push(`字段 '${fieldName}' 类型错误: 期望 boolean, 实际 ${typeof value}`);
+        }
+      }
+
+      // 检查必填字段（proto2）
+      if (state.selectedSchema.content.includes('syntax = "proto2"')) {
+        for (const fieldName in fields) {
+          const field = fields[fieldName];
+          if (field.rule === 'required' && !(fieldName in jsonData)) {
+            errors.push(`缺少必填字段 '${fieldName}'`);
+          }
+        }
+      }
+
+      if (errors.length > 0) {
+        return { valid: false, errors: errors };
+      }
+
+      return { valid: true };
     }
 
     function setupFileUploadListeners() {
@@ -733,6 +842,18 @@
           jsonData = JSON.parse(text);
         } else {
           jsonData = JSON.parse(data.trim());
+        }
+
+        // 添加字段级验证
+        if (state.selectedSchema) {
+          const messageTypes = state.selectedSchema.root.nested;
+          const firstType = Object.keys(messageTypes)[0];
+          if (firstType) {
+            const validation = validateSchemaFields(jsonData, firstType);
+            if (!validation.valid) {
+              throw new Error(`字段验证失败:\n${validation.errors.join('\n')}`);
+            }
+          }
         }
 
         // 从 schema 获取消息类型
