@@ -556,14 +556,103 @@
       });
     }
 
+    // 文件上传处理函数
+    async function handleFileUpload(file) {
+      if (!file) return;
+
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        showToast('文件过大，请上传小于 10MB 的文件', 'error');
+        return;
+      }
+
+      try {
+        const data = await file.arrayBuffer();
+        state.inputData = data;
+        state.inputType = 'file';
+
+        // 更新UI
+        elements.uploadArea.innerHTML = `
+          文件: ${escapeHtml(file.name)}<br>
+          大小: ${formatBytes(file.size)}
+        `;
+        elements.convertBtn.disabled = !state.selectedSchema;
+      } catch (error) {
+        console.error('File upload failed:', error);
+        showToast('文件读取失败', 'error');
+      }
+    }
+
+    function handleTextInput(text) {
+      state.inputData = text;
+      state.inputType = 'text';
+
+      if (text) {
+        const size = new Blob([text]).size;
+        elements.uploadArea.textContent = `文本大小: ${formatBytes(size)}`;
+      } else {
+        elements.uploadArea.innerHTML = '<p>拖拽文件到这里，或点击选择文件</p><p class="upload-subtext">支持 .pb 和 .json 文件</p>';
+      }
+
+      elements.convertBtn.disabled = !state.selectedSchema || !text;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    function setupFileUploadListeners() {
+      // 点击上传
+      elements.uploadArea.addEventListener('click', () => {
+        elements.fileInput.click();
+      });
+
+      elements.fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          handleFileUpload(file);
+        }
+      });
+
+      // 拖拽上传
+      elements.uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        elements.uploadArea.classList.add('dragover');
+      });
+
+      elements.uploadArea.addEventListener('dragleave', () => {
+        elements.uploadArea.classList.remove('dragover');
+      });
+
+      elements.uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        elements.uploadArea.classList.remove('dragover');
+
+        const file = e.dataTransfer.files[0];
+        if (file) {
+          handleFileUpload(file);
+        }
+      });
+
+      // 文本输入
+      elements.dataInput.addEventListener('input', (e) => {
+        handleTextInput(e.target.value);
+      });
+    }
+
     // 基础初始化函数
     function init() {
         initElements();
         setupSchemaEventListeners();
-        setupSchemaListEventListeners();
         setupModeEventListeners();
+        setupFileUploadListeners();
+        setupSchemaListEventListeners();
         loadSchemas();
-        switchMode('parse'); // 默认模式
+        switchMode('parse');
     }
 
     // 当 DOM 加载完成后初始化
