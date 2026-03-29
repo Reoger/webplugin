@@ -66,6 +66,7 @@
         elements.modeSwitcher = document.querySelector('.mode-switcher');
         elements.parseBtn = document.querySelector('.parse-btn');
         elements.generateBtn = document.querySelector('.generate-btn');
+        elements.modeButtons = document.querySelectorAll('.mode-btn');
 
         // 输入相关元素
         elements.uploadArea = document.getElementById('upload-area');
@@ -75,6 +76,13 @@
         elements.clearTextBtn = document.getElementById('clear-text-btn');
         elements.formatTextBtn = document.getElementById('format-text-btn');
         elements.formatOptions = document.getElementById('format-options');
+
+        // 模式相关UI元素
+        elements.inputTitle = document.querySelector('h3'); // 第一个h3应该是在schema section后面
+        elements.uploadText = document.querySelector('.upload-text p');
+        elements.dataInput = elements.textInput; // 使用现有的textInput作为dataInput
+        elements.convertBtn = elements.processBtn; // 使用现有的processBtn作为convertBtn
+        elements.resultTitle = document.querySelector('#result-section h3');
 
         // 动作按钮
         elements.processBtn = document.getElementById('process-btn');
@@ -500,12 +508,62 @@
         }
     }
 
+    // 模式切换函数
+    function switchMode(mode) {
+      state.currentMode = mode;
+
+      // 更新模式按钮状态
+      elements.modeButtons.forEach(btn => {
+        if (btn.dataset.mode === mode) {
+          btn.classList.add('active');
+          btn.setAttribute('aria-selected', 'true');
+        } else {
+          btn.classList.remove('active');
+          btn.setAttribute('aria-selected', 'false');
+        }
+      });
+
+      // 根据模式更新UI
+      if (mode === 'parse') {
+        elements.inputTitle.textContent = '输入 pb 数据';
+        elements.uploadText.innerHTML = '<p>拖拽 .pb 文件到这里，或点击选择文件</p><p class="upload-subtext">支持 .pb 二进制文件</p>';
+        elements.fileInput.accept = '.pb';
+        elements.dataInput.placeholder = '粘贴 base64 编码的数据或直接粘贴 pb 二进制数据...';
+        elements.convertBtn.innerHTML = '<span class="btn-icon">▶️</span><span class="btn-text">解析</span>';
+        elements.resultTitle.textContent = '解析结果';
+      } else {
+        elements.inputTitle.textContent = '输入 JSON 数据';
+        elements.uploadText.innerHTML = '<p>拖拽 .json 文件到这里，或点击选择文件</p><p class="upload-subtext">支持 .json 文件</p>';
+        elements.fileInput.accept = '.json';
+        elements.dataInput.placeholder = '粘贴 JSON 数据...';
+        elements.convertBtn.innerHTML = '<span class="btn-icon">⚡</span><span class="btn-text">编码</span>';
+        elements.resultTitle.textContent = '编码结果';
+      }
+
+      // 清除之前的结果
+      elements.resultSection.classList.add('hidden');
+      elements.resultContent.innerHTML = '<div class="placeholder-text">处理结果将显示在这里</div>';
+      elements.debugContent.innerHTML = '<div class="placeholder-text">调试信息将显示在这里</div>';
+      elements.rawContent.innerHTML = '<pre class="raw-data">原始数据将显示在这里</pre>';
+    }
+
+    // 设置模式事件监听器
+    function setupModeEventListeners() {
+      elements.modeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          switchMode(btn.dataset.mode);
+        });
+      });
+    }
+
     // 基础初始化函数
     function init() {
         initElements();
         setupSchemaEventListeners();
         setupSchemaListEventListeners();
+        setupModeEventListeners();
         loadSchemas();
+        switchMode('parse'); // 默认模式
     }
 
     // 当 DOM 加载完成后初始化
