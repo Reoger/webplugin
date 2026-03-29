@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protobuf Schema Parser</title>
+    <title>PB Converter</title>
     <link rel="stylesheet" href="popup.css">
-    <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.5/dist/protobuf.min.js"></script>
 </head>
 <body>
-    <!-- Main Container -->
     <div class="container">
         <!-- Header -->
-        <header class="header">
+        <div class="header">
             <div class="logo-section">
                 <div class="logo">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -21,7 +19,7 @@
                         <circle cx="9" cy="15" r="1" fill="#4A90E2"/>
                         <circle cx="15" cy="15" r="1" fill="#4A90E2"/>
                     </svg>
-                    <span>Protobuf Parser</span>
+                    <span>PB Converter</span>
                 </div>
             </div>
             <div class="mode-switcher">
@@ -34,7 +32,7 @@
                     <span class="text">Generate</span>
                 </button>
             </div>
-        </header>
+        </div>
 
         <!-- Main Content -->
         <main class="main-content">
@@ -79,7 +77,7 @@
 
             <!-- Input Section -->
             <section class="input-section" id="input-section">
-                <h3>Data Input</h3>
+                <h3 id="input-title">Data Input</h3>
 
                 <!-- Mode-specific Instructions -->
                 <div class="mode-instructions" id="mode-instructions">
@@ -87,7 +85,7 @@
                         <p>Upload your binary data file or paste base64-encoded data:</p>
                     </div>
                     <div class="instruction-content generate-instructions" style="display: none;">
-                        <p>Upload your schema file (.proto) or paste schema content:</p>
+                        <p>Upload your JSON data file or paste JSON content:</p>
                     </div>
                 </div>
 
@@ -97,10 +95,10 @@
                         <div class="upload-icon">📁</div>
                         <div class="upload-text">
                             <p>Drop files here or click to browse</p>
-                            <p class="upload-subtext">Supports binary files (.bin, .dat) and schema files (.proto)</p>
+                            <p class="upload-subtext">Supports binary files (.pb, .bin) and JSON files (.json)</p>
                         </div>
                     </div>
-                    <input type="file" id="file-input" class="file-input" accept=".bin,.dat,.proto">
+                    <input type="file" id="file-input" class="file-input" accept=".pb,.bin,.json">
                     <button class="btn-primary upload-btn" id="upload-btn">Choose Files</button>
                 </div>
 
@@ -118,7 +116,7 @@
                     </div>
                 </div>
 
-                <!-- Data Format Options -->
+                <!-- Data Format Options (for parse mode) -->
                 <div class="format-options" id="format-options">
                     <label>Input Format:</label>
                     <div class="format-radios">
@@ -140,7 +138,7 @@
 
             <!-- Action Button -->
             <div class="action-section">
-                <button class="btn-primary action-btn" id="process-btn" disabled>
+                <button class="action-btn" id="process-btn" disabled>
                     <span class="btn-icon">▶️</span>
                     <span class="btn-text">Process Data</span>
                 </button>
@@ -150,7 +148,7 @@
         <!-- Result Section -->
         <section class="result-section" id="result-section" style="display: none;">
             <div class="result-header">
-                <h3>Processing Result</h3>
+                <h3 id="result-title">Processing Result</h3>
                 <div class="result-actions">
                     <button class="btn-icon" id="copy-result-btn" title="Copy Result">
                         📋
@@ -252,6 +250,7 @@
     <div class="toast-container" id="toast-container"></div>
 
     <!-- Scripts -->
+    <script src="proto-wrapper.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

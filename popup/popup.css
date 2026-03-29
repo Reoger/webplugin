@@ -17,6 +17,8 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
+    min-width: 500px;
+    width: 500px;
 }
 
 /* CSS Variables */
@@ -85,6 +87,7 @@ body {
 /* Container */
 .container {
     width: 100%;
+    min-width: 480px;
     max-width: 600px;
     min-height: 400px;
     margin: 0 auto;

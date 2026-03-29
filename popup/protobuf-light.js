@@ -1,0 +1,1 @@
+Couldn't find the requested file /dist/protobuf-light.min.js in protobufjs.

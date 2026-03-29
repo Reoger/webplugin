@@ -77,15 +77,15 @@
         elements.formatTextBtn = document.getElementById('format-text-btn');
         elements.formatOptions = document.getElementById('format-options');
 
-        // 模式相关UI元素
-        elements.inputTitle = document.querySelector('h3'); // 第一个h3应该是在schema section后面
-        elements.uploadText = document.querySelector('.upload-text p');
-        elements.dataInput = elements.textInput; // 使用现有的textInput作为dataInput
-        elements.convertBtn = elements.processBtn; // 使用现有的processBtn作为convertBtn
-        elements.resultTitle = document.querySelector('#result-section h3');
-
         // 动作按钮
         elements.processBtn = document.getElementById('process-btn');
+
+        // 模式相关UI元素
+        elements.inputTitle = document.getElementById('input-title');
+        elements.uploadText = document.querySelector('.upload-text');
+        elements.dataInput = elements.textInput; // 使用现有的textInput作为dataInput
+        elements.convertBtn = elements.processBtn; // 使用现有的processBtn作为convertBtn
+        elements.resultTitle = document.getElementById('result-title');
 
         // 结果相关元素
         elements.resultTabs = document.querySelector('.result-tabs');
@@ -98,6 +98,10 @@
         elements.copyResultBtn = document.getElementById('copy-result-btn');
         elements.downloadResultBtn = document.getElementById('download-result-btn');
         elements.clearResultBtn = document.getElementById('clear-result-btn');
+
+        // 标签页按钮
+        elements.tabButtons = document.querySelectorAll('.tab-btn');
+        elements.tabPanes = document.querySelectorAll('.tab-pane');
 
         // 模态框元素
         elements.schemaManagerModal = document.getElementById('schema-manager-modal');
@@ -113,6 +117,13 @@
         return new Promise((resolve, reject) => {
             try {
                 chrome.storage.local.get(['schemas'], (result) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('Chrome storage error:', chrome.runtime.lastError);
+                        showToast('Failed to load schemas', 'error');
+                        reject(chrome.runtime.lastError);
+                        return;
+                    }
+
                     const schemas = result.schemas || [];
                     state.schemas = schemas;
                     updateSchemaDropdown();
@@ -131,6 +142,13 @@
         return new Promise((resolve, reject) => {
             try {
                 chrome.storage.local.set({ schemas: state.schemas }, () => {
+                    if (chrome.runtime.lastError) {
+                        console.error('Chrome storage error:', chrome.runtime.lastError);
+                        showToast('Failed to save schemas', 'error');
+                        reject(chrome.runtime.lastError);
+                        return;
+                    }
+
                     showToast('Schemas saved successfully', 'success');
                     resolve(state.schemas);
                 });
@@ -202,7 +220,7 @@
         return new Promise((resolve, reject) => {
             try {
                 // 验证 proto 语法
-                const root = protobuf.parse(content);
+                const root = ProtoWrapper.parse(content);
 
                 const newSchema = {
                     id: generateUUID(),
@@ -213,7 +231,9 @@
                 };
 
                 state.schemas.push(newSchema);
-                saveSchemas().then(resolve).catch(reject);
+                saveSchemas()
+                    .then(() => resolve(newSchema))
+                    .catch(reject);
             } catch (error) {
                 console.error('Schema validation error:', error);
                 showToast('Invalid proto syntax', 'error');
@@ -226,7 +246,7 @@
         return new Promise((resolve, reject) => {
             try {
                 // 验证 proto 语法
-                const root = protobuf.parse(content);
+                const root = ProtoWrapper.parse(content);
 
                 const schemaIndex = state.schemas.findIndex(s => s.id === schemaId);
                 if (schemaIndex === -1) {
@@ -240,7 +260,9 @@
                     updatedAt: new Date().toISOString()
                 };
 
-                saveSchemas().then(resolve).catch(reject);
+                saveSchemas()
+                    .then(() => resolve(state.schemas[schemaIndex]))
+                    .catch(reject);
             } catch (error) {
                 console.error('Schema validation error:', error);
                 showToast('Invalid proto syntax', 'error');
@@ -260,7 +282,9 @@
                     displaySchema(null);
                 }
 
-                saveSchemas().then(resolve).catch(reject);
+                saveSchemas()
+                    .then(() => resolve())
+                    .catch(reject);
             } catch (error) {
                 console.error('Error deleting schema:', error);
                 showToast('Failed to delete schema', 'error');
@@ -330,9 +354,14 @@
                             state.schemas.push(newSchema);
                         });
 
-                        saveSchemas().then(() => {
-                            showToast(`Imported ${validatedSchemas.length} schemas successfully`, 'success');
-                        });
+                        saveSchemas()
+                            .then(() => {
+                                showToast(`Imported ${validatedSchemas.length} schemas successfully`, 'success');
+                            })
+                            .catch(error => {
+                                console.error('Failed to save imported schemas:', error);
+                                showToast('Failed to save imported schemas', 'error');
+                            });
 
                     } catch (error) {
                         console.error('Error parsing schema file:', error);
@@ -374,8 +403,8 @@
 
         // 解析 schema 以获取消息类型
         try {
-            const root = protobuf.parse(schema.content);
-            const messageTypes = Object.keys(root.nested || {});
+            const root = ProtoWrapper.parse(schema.content);
+            const messageTypes = Object.keys(root.messages || {});
 
             if (messageTypes.length > 0) {
                 elements.schemaContent.innerHTML += `
@@ -388,10 +417,10 @@
                 `;
             }
 
-            // 缓存解析后的 schema root 以供验证使用
+            // 缓存解析后的 schema 以供验证使用
             state.selectedSchema = {
                 ...schema,
-                root: root
+                messages: root.messages
             };
             elements.processBtn.disabled = false;
 
@@ -422,29 +451,72 @@
 
         // "管理 Schema" 按钮点击事件
         elements.schemaManagerBtn.addEventListener('click', function() {
-            elements.schemaManagerModal.style.display = 'block';
+            console.log('Manager button clicked, showing modal...');
+            elements.schemaManagerModal.classList.add('active');
             elements.schemaList.style.display = 'block';
         });
 
         // Modal 关闭事件
         elements.closeModalBtn.addEventListener('click', function() {
-            elements.schemaManagerModal.style.display = 'none';
+            console.log('Close button clicked, hiding modal...');
+            elements.schemaManagerModal.classList.remove('active');
         });
 
         elements.modalBackdrop.addEventListener('click', function() {
-            elements.schemaManagerModal.style.display = 'none';
+            console.log('Backdrop clicked, hiding modal...');
+            elements.schemaManagerModal.classList.remove('active');
         });
 
         // 模态框外部点击关闭
         window.addEventListener('click', function(event) {
             if (event.target === elements.schemaManagerModal) {
-                elements.schemaManagerModal.style.display = 'none';
+                console.log('Modal background clicked, hiding modal...');
+                elements.schemaManagerModal.classList.remove('active');
             }
         });
 
         // 导入/导出 schemas 按钮事件
         elements.importSchemaBtn.addEventListener('click', importSchemas);
         elements.exportSchemaBtn.addEventListener('click', exportSchemas);
+
+        // Load Example 按钮事件
+        elements.loadExampleBtn.addEventListener('click', function() {
+            console.log('Load Example clicked');
+            const exampleSchema = `syntax = "proto3";
+
+message User {
+  int32 id = 1;
+  string name = 2;
+  string email = 3;
+  bool is_active = 4;
+}`;
+
+            addSchema('Example User Schema', exampleSchema)
+                .then((newSchema) => {
+                    // 选择刚添加的 schema
+                    elements.schemaSelect.value = newSchema.id;
+                    displaySchema(newSchema);
+                    showToast('Example schema loaded successfully', 'success');
+                })
+                .catch(error => {
+                    console.error('Failed to load example:', error);
+                    showToast('Failed to load example schema', 'error');
+                });
+        });
+
+        // Clear Schema 按钮事件
+        elements.clearSchemaBtn.addEventListener('click', function() {
+            console.log('Clear Schema clicked');
+            if (state.selectedSchema) {
+                if (confirm('Clear current schema?')) {
+                    displaySchema(null);
+                    elements.schemaSelect.value = '';
+                    showToast('Schema cleared', 'success');
+                }
+            } else {
+                showToast('No schema selected', 'warning');
+            }
+        });
     }
 
     // Schema 列表动态事件监听器（使用事件委托）
@@ -462,7 +534,7 @@
                 // 使用 schema
                 elements.schemaSelect.value = schemaId;
                 displaySchema(schema);
-                elements.schemaManagerModal.style.display = 'none';
+                elements.schemaManagerModal.classList.remove('active');
                 showToast(`Using schema: ${schema.name}`, 'success');
 
             } else if (event.target.classList.contains('edit-schema-btn')) {
@@ -477,6 +549,10 @@
                     .then(() => {
                         elements.schemaSelect.value = schemaId;
                         displaySchema(schema);
+                    })
+                    .catch(error => {
+                        console.error('Failed to edit schema:', error);
+                        showToast('Failed to edit schema', 'error');
                     });
 
             } else if (event.target.classList.contains('delete-schema-btn')) {
@@ -485,6 +561,10 @@
                     deleteSchema(schemaId)
                         .then(() => {
                             showToast(`Deleted schema: ${schema.name}`, 'success');
+                        })
+                        .catch(error => {
+                            console.error('Failed to delete schema:', error);
+                            showToast('Failed to delete schema', 'error');
                         });
                 }
             }
@@ -504,6 +584,9 @@
             addSchema(name, content)
                 .then(() => {
                     showToast('Schema added successfully', 'success');
+                })
+                .catch(error => {
+                    console.error('Failed to add schema:', error);
                 });
         };
 
@@ -548,7 +631,7 @@
       }
 
       // 清除之前的结果
-      elements.resultSection.classList.add('hidden');
+      elements.resultSection.style.display = 'none';
       elements.resultContent.innerHTML = '<div class="placeholder-text">处理结果将显示在这里</div>';
       elements.debugContent.innerHTML = '<div class="placeholder-text">调试信息将显示在这里</div>';
       elements.rawContent.innerHTML = '<pre class="raw-data">原始数据将显示在这里</pre>';
@@ -575,7 +658,7 @@
 
       try {
         const data = await file.arrayBuffer();
-        state.inputData = data;
+        state.inputData = new Uint8Array(data);
         state.inputType = 'file';
 
         // 更新UI
@@ -584,6 +667,7 @@
           大小: ${formatBytes(file.size)}
         `;
         elements.convertBtn.disabled = !state.selectedSchema;
+        console.log('File uploaded successfully, size:', state.inputData.length);
       } catch (error) {
         console.error('File upload failed:', error);
         showToast('文件读取失败', 'error');
@@ -610,7 +694,7 @@
 
           // 如果选择了 schema，验证字段
           if (state.selectedSchema) {
-            const messageTypes = state.selectedSchema.root.nested;
+            const messageTypes = state.selectedSchema.messages;
             const firstType = Object.keys(messageTypes)[0];
             if (firstType) {
               const schemaValidation = validateSchemaFields(validation.data, firstType);
@@ -670,12 +754,15 @@
     }
 
     function validateSchemaFields(jsonData, messageType) {
-      const type = state.selectedSchema.root.nested[messageType];
+      const schema = ProtoWrapper.parse(state.selectedSchema.content);
+      const messageTypes = schema.messages;
+      const type = messageTypes[messageType];
+
       if (!type) {
         return { valid: true }; // 无法验证
       }
 
-      const fields = type.fields;
+      const fields = type;
       const errors = [];
 
       for (const fieldName in jsonData) {
@@ -767,62 +854,79 @@
 
         // 处理不同的输入类型
         if (state.inputType === 'file') {
-          buffer = new Uint8Array(data);
+          buffer = data; // 已经是 Uint8Array
         } else {
-          // 文本输入 - 先尝试 base64
+          // 文本输入 - 根据选择的格式处理
           const text = data.trim();
+          console.log('Input text length:', text.length);
+          console.log('Input text preview:', text.substring(0, 50));
+
+          // 获取选择的输入格式
+          const inputFormat = document.querySelector('input[name="input-format"]:checked').value;
+          console.log('Input format:', inputFormat);
+
           try {
-            const binaryString = atob(text);
-            buffer = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              buffer[i] = binaryString.charCodeAt(i);
+            if (inputFormat === 'base64') {
+              // Base64 格式
+              const cleanText = text.replace(/\s/g, '');
+              console.log('Cleaned base64 length:', cleanText.length);
+              const binaryString = atob(cleanText);
+              buffer = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                buffer[i] = binaryString.charCodeAt(i);
+              }
+            } else if (inputFormat === 'hex') {
+              // 十六进制格式
+              const cleanText = text.replace(/\s/g, '');
+              console.log('Cleaned hex length:', cleanText.length);
+
+              if (cleanText.length % 2 !== 0) {
+                throw new Error('Hex string must have even length');
+              }
+
+              buffer = new Uint8Array(cleanText.length / 2);
+              for (let i = 0; i < cleanText.length; i += 2) {
+                const byte = parseInt(cleanText.substr(i, 2), 16);
+                if (isNaN(byte)) {
+                  throw new Error(`Invalid hex character at position ${i}`);
+                }
+                buffer[i / 2] = byte;
+              }
+            } else {
+              // Binary 格式（直接二进制）
+              buffer = new TextEncoder().encode(text);
             }
+
+            console.log('Buffer created, length:', buffer.length);
+            console.log('Buffer hex:', Array.from(buffer.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' '));
           } catch (e) {
-            // 不是 base64，尝试直接二进制
-            buffer = new TextEncoder().encode(text);
+            console.error('Data decode failed:', e);
+            throw new Error(`Failed to decode ${inputFormat}: ${e.message}`);
           }
         }
 
-        // 从 schema 获取所有消息类型
-        const root = protobuf.parse(state.selectedSchema.content);
-        const messageTypes = root.root.nested;
+        // 从 schema 获取消息类型
+        const root = ProtoWrapper.parse(state.selectedSchema.content);
+        const messageTypes = root.messages;
         if (!messageTypes || Object.keys(messageTypes).length === 0) {
           throw new Error('Schema 中没有定义消息类型');
         }
 
-        // 尝试每个消息类型直到成功
-        let decoded = null;
-        let usedType = null;
+        // 使用第一个消息类型
+        const messageType = Object.keys(messageTypes)[0];
 
-        for (const [typeName, type] of Object.entries(messageTypes)) {
-          try {
-            decoded = type.decode(buffer);
-            usedType = typeName;
-            break;
-          } catch (e) {
-            // 尝试下一个类型
-            continue;
-          }
-        }
-
-        if (!decoded) {
-          throw new Error('无法使用 Schema 中的任何消息类型解析数据');
-        }
-
-        // 转换为纯对象
-        const json = type.toObject(decoded, {
-          longs: String,
-          enums: String,
-          bytes: String,
-        });
+        // 解码
+        const decoded = ProtoWrapper.decode(buffer, messageTypes[messageType]);
+        console.log('Decoded result:', decoded);
 
         return {
           success: true,
-          messageType: usedType,
-          data: json
+          messageType: messageType,
+          data: decoded
         };
       } catch (error) {
         console.error('Parse error:', error);
+        console.error('Error stack:', error.stack);
         throw new Error(`解析失败: ${error.message}`);
       }
     }
@@ -844,60 +948,22 @@
           jsonData = JSON.parse(data.trim());
         }
 
-        // 添加字段级验证
-        if (state.selectedSchema) {
-          const messageTypes = state.selectedSchema.root.nested;
-          const firstType = Object.keys(messageTypes)[0];
-          if (firstType) {
-            const validation = validateSchemaFields(jsonData, firstType);
-            if (!validation.valid) {
-              throw new Error(`字段验证失败:\n${validation.errors.join('\n')}`);
-            }
-          }
-        }
-
         // 从 schema 获取消息类型
-        const root = protobuf.parse(state.selectedSchema.content);
-        const messageTypes = root.root.nested;
+        const root = ProtoWrapper.parse(state.selectedSchema.content);
+        const messageTypes = root.messages;
         if (!messageTypes || Object.keys(messageTypes).length === 0) {
           throw new Error('Schema 中没有定义消息类型');
         }
 
-        // 尝试验证并编码每个消息类型
-        let buffer = null;
-        let usedType = null;
-        let validationErrors = [];
+        // 使用第一个消息类型
+        const messageType = Object.keys(messageTypes)[0];
 
-        for (const [typeName, type] of Object.entries(messageTypes)) {
-          try {
-            // 创建消息实例
-            const message = type.create(jsonData);
-            buffer = type.encode(message).finish();
-            usedType = typeName;
-
-            // 通过解码验证
-            const decoded = type.decode(buffer);
-            const verified = type.verify(decoded);
-            if (verified) {
-              validationErrors.push(`${typeName}: ${verified}`);
-              buffer = null;
-              continue;
-            }
-
-            break;
-          } catch (e) {
-            validationErrors.push(`${typeName}: ${e.message}`);
-            continue;
-          }
-        }
-
-        if (!buffer) {
-          throw new Error(`无法编码数据:\n${validationErrors.join('\n')}`);
-        }
+        // 编码
+        const buffer = ProtoWrapper.encode(jsonData, messageTypes[messageType]);
 
         return {
           success: true,
-          messageType: usedType,
+          messageType: messageType,
           buffer: buffer,
           base64: btoa(String.fromCharCode.apply(null, buffer))
         };
@@ -909,28 +975,164 @@
 
     // Display JSON result
     function displayJsonResult(data, messageType) {
-      const json = JSON.stringify(data, null, 2);
+      console.log('Displaying JSON result:', data);
+      console.log('Message type:', messageType);
 
-      // Show result section
-      elements.resultSection.style.display = 'block';
+      // 使用缓存的 schema，不要重新解析
+      const messageTypes = state.selectedSchema.messages || {};
+      const messageFields = messageTypes[messageType];
+      console.log('Cached message types:', messageTypes);
+      console.log('Message fields from cache:', messageFields);
 
-      // Create result info
-      const resultInfo = document.createElement('div');
-      resultInfo.className = 'result-info';
-      resultInfo.innerHTML = `
-        消息类型: <strong>${escapeHtml(messageType)}</strong><br>
-        数据大小: ${formatBytes(new Blob([json]).size)}
-      `;
+      if (messageFields) {
+        // 创建字段名映射
+        const fieldMap = {};
+        console.log('=== Starting field mapping ===');
+        console.log('messageFields:', messageFields);
+        console.log('messageFields keys:', Object.keys(messageFields));
+        console.log('messageFields values:', Object.values(messageFields));
 
-      // 简单的语法高亮
-      const highlighted = highlightJson(json);
+        for (const [fieldNum, field] of Object.entries(messageFields)) {
+          console.log(`=== Processing field ${fieldNum} ===`);
+          console.log('  Full field object:', JSON.stringify(field, null, 2));
+          console.log('  field.type:', field.type);
+          console.log('  field.number:', field.number);
+          console.log('  field.name:', field.name);
+          console.log('  field.rule:', field.rule);
+          console.log('  Has name property?', 'name' in field);
 
-      // Update result content
-      elements.resultContent.innerHTML = '';
-      elements.resultContent.appendChild(resultInfo);
-      elements.resultContent.innerHTML += `<pre class="json-output">${highlighted}</pre>`;
+          if (field.name) {
+            fieldMap[fieldNum] = field.name;
+            console.log(`  ✓ Mapped ${fieldNum} -> ${field.name}`);
+          } else {
+            console.warn(`  ✗ field.name is undefined for field ${fieldNum}!`);
+            fieldMap[fieldNum] = fieldNum;
+          }
+        }
 
-      state.parsedData = data;
+        console.log('=== Final field map ===:', fieldMap);
+        console.log('fieldMap as JSON:', JSON.stringify(fieldMap, null, 2));
+
+        // 转换数据：字段号 -> 字段名，同时处理类型转换
+        const mappedData = {};
+        console.log('=== Starting data conversion ===');
+        for (const [fieldNum, value] of Object.entries(data)) {
+          // 将 fieldNum 转换为字符串以匹配 fieldMap 的键类型
+          const fieldKey = String(fieldNum);
+          const fieldName = fieldMap[fieldKey] || fieldKey;
+          const fieldDef = messageFields[fieldKey];
+
+          console.log(`Field ${fieldKey}: ${value} -> ${fieldName}`);
+
+          // 根据字段类型转换值
+          let finalValue = value;
+          if (fieldDef && fieldDef.type === 'bool') {
+            finalValue = value === 1;
+          }
+
+          mappedData[fieldName] = finalValue;
+        }
+
+        console.log('=== Final mapped data ===:', mappedData);
+        const json = JSON.stringify(mappedData, null, 2);
+        console.log('Final JSON string:', json);
+
+        // Show result section
+        elements.resultSection.style.display = 'block';
+        console.log('Result section display set to block');
+
+        // Create result info
+        const resultInfo = document.createElement('div');
+        resultInfo.className = 'result-info';
+        resultInfo.innerHTML = `
+          消息类型: <strong>${escapeHtml(messageType)}</strong><br>
+          数据大小: ${formatBytes(new Blob([json]).size)}
+        `;
+
+        // 简单的语法高亮
+        const highlighted = highlightJson(json);
+        console.log('Highlighted HTML length:', highlighted.length);
+
+        // Update result content
+        elements.resultContent.innerHTML = '';
+        elements.resultContent.appendChild(resultInfo);
+        elements.resultContent.innerHTML += `<pre class="json-output">${highlighted}</pre>`;
+        console.log('Result content updated, HTML length:', elements.resultContent.innerHTML.length);
+
+        // 更新 debug 和 raw 标签页内容
+        elements.debugContent.innerHTML = `
+          <div class="debug-info">
+            <h4>🔍 调试信息</h4>
+
+            <h5>1. 原始解析数据（字段号）:</h5>
+            <pre style="background: #f5f5f5; padding: 8px; font-size: 12px;">${JSON.stringify(data, null, 2)}</pre>
+
+            <h5>2. Schema 字段定义:</h5>
+            <pre style="background: #f5f5f5; padding: 8px; font-size: 12px;">${JSON.stringify(messageFields, null, 2)}</pre>
+
+            <h5>3. 字段映射表:</h5>
+            <pre style="background: #e8f4f8; padding: 8px; font-size: 12px; border: 2px solid #4CAF50;">${JSON.stringify(fieldMap, null, 2)}</pre>
+
+            <h5>4. 映射后的数据（应该使用字段名）:</h5>
+            <pre style="background: #fff3cd; padding: 8px; font-size: 12px; border: 2px solid #ff9800;">${JSON.stringify(mappedData, null, 2)}</pre>
+
+            <h5>5. mappedData 的键列表:</h5>
+            <p style="color: #d32f2f; font-weight: bold;">${Object.keys(mappedData).join(', ')}</p>
+
+            <h5>6. 检查结果:</h5>
+            <p style="${Object.keys(mappedData).some(k => !isNaN(parseInt(k))) ? 'color: red; font-weight: bold;' : 'color: green; font-weight: bold;'}">
+              ${Object.keys(mappedData).some(k => !isNaN(parseInt(k))) ?
+                '❌ 问题：仍有数字键！映射失败！' :
+                '✅ 成功：所有键都是字段名！'}
+            </p>
+          </div>
+        `;
+
+        elements.rawContent.innerHTML = `
+          <div class="raw-data">
+            <h4>原始 JSON</h4>
+            <pre>${json}</pre>
+          </div>
+        `;
+
+        state.parsedData = mappedData;
+        console.log('JSON result display completed');
+      } else {
+        // 没有字段信息，使用原始数据
+        const json = JSON.stringify(data, null, 2);
+        elements.resultSection.style.display = 'block';
+
+        const resultInfo = document.createElement('div');
+        resultInfo.className = 'result-info';
+        resultInfo.innerHTML = `
+          消息类型: <strong>${escapeHtml(messageType)}</strong><br>
+          数据大小: ${formatBytes(new Blob([json]).size)}
+        `;
+
+        const highlighted = highlightJson(json);
+        elements.resultContent.innerHTML = '';
+        elements.resultContent.appendChild(resultInfo);
+        elements.resultContent.innerHTML += `<pre class="json-output">${highlighted}</pre>`;
+
+        // 更新 debug 和 raw 标签页内容
+        elements.debugContent.innerHTML = `
+          <div class="debug-info">
+            <h4>解析信息</h4>
+            <p><strong>消息类型:</strong> ${messageType}</p>
+            <p><strong>字段数量:</strong> ${Object.keys(data).length}</p>
+            <p><strong>注意:</strong> 没有字段定义信息，使用字段号</p>
+          </div>
+        `;
+
+        elements.rawContent.innerHTML = `
+          <div class="raw-data">
+            <h4>原始 JSON</h4>
+            <pre>${json}</pre>
+          </div>
+        `;
+
+        state.parsedData = data;
+      }
     }
 
     // Display encode result
@@ -949,7 +1151,7 @@
       const json = JSON.stringify(displayData, null, 2);
       const highlighted = highlightJson(json);
       elements.resultOutput.innerHTML = highlighted;
-      elements.resultSection.classList.remove('hidden');
+      elements.resultSection.style.display = 'block';
 
       state.parsedData = result.buffer;
     }
@@ -975,6 +1177,25 @@
 
     // Setup conversion listeners
     function setupConversionListeners() {
+      // 标签页切换事件
+      elements.tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tabName = btn.dataset.tab;
+          console.log('Tab clicked:', tabName);
+
+          // 移除所有 active 类
+          elements.tabButtons.forEach(b => b.classList.remove('active'));
+          elements.tabPanes.forEach(p => p.classList.remove('active'));
+
+          // 添加 active 类到当前标签
+          btn.classList.add('active');
+          const targetPane = document.getElementById(`${tabName}-tab`);
+          if (targetPane) {
+            targetPane.classList.add('active');
+          }
+        });
+      });
+
       elements.processBtn.addEventListener('click', async () => {
         if (!state.selectedSchema) {
           showToast('请先选择 Schema', 'warning');
@@ -1005,7 +1226,7 @@
         } catch (error) {
           console.error('Conversion error:', error);
           showToast(error.message, 'error');
-          elements.resultSection.classList.add('hidden');
+          elements.resultSection.style.display = 'none';
         } finally {
           elements.processBtn.disabled = false;
           elements.processBtn.innerHTML = originalText;
@@ -1053,14 +1274,32 @@
 
     // 基础初始化函数
     function init() {
-        initElements();
-        setupSchemaEventListeners();
-        setupModeEventListeners();
-        setupFileUploadListeners();
-        setupConversionListeners();
-        setupSchemaListEventListeners();
-        loadSchemas();
-        switchMode('parse');
+        console.log('Initializing PB Converter...');
+        try {
+            initElements();
+            console.log('Elements initialized');
+            setupSchemaEventListeners();
+            console.log('Schema event listeners setup');
+            setupModeEventListeners();
+            console.log('Mode event listeners setup');
+            setupFileUploadListeners();
+            console.log('File upload listeners setup');
+            setupConversionListeners();
+            console.log('Conversion listeners setup');
+            setupSchemaListEventListeners();
+            console.log('Schema list listeners setup');
+
+            // 加载 schemas（异步，但不需要等待完成）
+            loadSchemas().catch(error => {
+                console.error('Failed to load schemas during init:', error);
+            });
+
+            switchMode('parse');
+            console.log('Initialization complete');
+        } catch (error) {
+            console.error('Initialization error:', error);
+            console.error('Error stack:', error.stack);
+        }
     }
 
     // 当 DOM 加载完成后初始化
