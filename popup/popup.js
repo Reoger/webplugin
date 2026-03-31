@@ -414,16 +414,19 @@ message User {
             });
         });
 
-        // File upload button — dynamically create input to avoid display:none issues
+        // File upload button — dynamically create input
         $('upload-btn').addEventListener('click', () => {
             const input = document.createElement('input');
             input.type = 'file';
-            // 不设 accept，允许选择所有文件类型（.pb/.bin/.json 等）
+            input.accept = '*/*';
             input.onchange = e => {
                 const file = e.target.files[0];
                 if (file) handleFile(file);
             };
+            document.body.appendChild(input);
             input.click();
+            // Clean up after dialog closes
+            setTimeout(() => input.remove(), 1000);
         });
 
         // Text input
