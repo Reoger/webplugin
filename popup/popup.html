@@ -10,191 +10,69 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <div class="logo-section">
-                <div class="logo">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h10v10H7V7z" fill="#4A90E2"/>
-                        <circle cx="9" cy="9" r="1" fill="#4A90E2"/>
-                        <circle cx="15" cy="9" r="1" fill="#4A90E2"/>
-                        <circle cx="9" cy="15" r="1" fill="#4A90E2"/>
-                        <circle cx="15" cy="15" r="1" fill="#4A90E2"/>
-                    </svg>
-                    <span>PB Converter</span>
+            <span class="logo">PB Converter</span>
+            <button class="settings-btn" id="settings-btn" title="设置">⚙️</button>
+        </div>
+
+        <!-- Settings Panel (hidden) -->
+        <div class="settings-panel" id="settings-panel">
+            <div class="settings-section">
+                <div class="settings-label">工作模式</div>
+                <div class="mode-toggle">
+                    <button class="mode-opt active" data-mode="parse">解析 PB → JSON</button>
+                    <button class="mode-opt" data-mode="encode">编码 JSON → PB</button>
                 </div>
             </div>
-            <div class="mode-switcher">
-                <button class="mode-btn parse-btn" data-mode="parse" aria-selected="true">
-                    <span class="icon">🔍</span>
-                    <span class="text">Parse</span>
-                </button>
-                <button class="mode-btn generate-btn" data-mode="generate" aria-selected="false">
-                    <span class="icon">⚡</span>
-                    <span class="text">Generate</span>
-                </button>
+            <div class="settings-section">
+                <div class="settings-label">Schema 管理</div>
+                <div class="settings-actions">
+                    <button class="settings-action-btn" id="load-example-btn">📝 加载示例</button>
+                    <button class="settings-action-btn" id="schema-manager-btn">📋 管理列表</button>
+                </div>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Schema Section -->
-            <section class="schema-section" id="schema-section">
-                <h3>Schema Configuration</h3>
+        <!-- Schema Row -->
+        <div class="schema-row">
+            <span class="schema-label">Schema</span>
+            <select id="schema-select" class="schema-select">
+                <option value="">-- 选择 Schema --</option>
+            </select>
+        </div>
 
-                <!-- Schema Selector -->
-                <div class="schema-selector">
-                    <label for="schema-select">Select Schema:</label>
-                    <select id="schema-select" class="schema-select">
-                        <option value="">-- Choose a schema --</option>
-                    </select>
-                    <button class="btn-secondary schema-manager-btn" id="schema-manager-btn">
-                        ⚙️ Manager
-                    </button>
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-toolbar">
+                <div class="format-pills">
+                    <button class="format-pill active" data-format="hex">Hex</button>
+                    <button class="format-pill" data-format="base64">Base64</button>
+                    <button class="format-pill" data-format="binary">Binary</button>
                 </div>
-
-                <!-- Schema Display -->
-                <div class="schema-display" id="schema-display">
-                    <div class="schema-header">
-                        <span class="schema-name" id="schema-name">No schema selected</span>
-                        <button class="btn-icon" id="refresh-schema-btn" title="Refresh Schema">
-                            🔄
-                        </button>
-                    </div>
-                    <div class="schema-content" id="schema-content">
-                        <div class="placeholder-text">Select a schema to view details</div>
-                    </div>
-                </div>
-
-                <!-- Quick Schema Actions -->
-                <div class="schema-actions">
-                    <button class="btn-secondary" id="load-example-btn">
-                        📝 Load Example
-                    </button>
-                    <button class="btn-secondary" id="clear-schema-btn">
-                        🗑️ Clear
-                    </button>
-                </div>
-            </section>
-
-            <!-- Input Section -->
-            <section class="input-section" id="input-section">
-                <h3 id="input-title">Data Input</h3>
-
-                <!-- Mode-specific Instructions -->
-                <div class="mode-instructions" id="mode-instructions">
-                    <div class="instruction-content parse-instructions">
-                        <p>Upload your binary data file or paste base64-encoded data:</p>
-                    </div>
-                    <div class="instruction-content generate-instructions" style="display: none;">
-                        <p>Upload your JSON data file or paste JSON content:</p>
-                    </div>
-                </div>
-
-                <!-- File Upload Area -->
-                <div class="upload-area" id="upload-area">
-                    <div class="upload-prompt">
-                        <div class="upload-icon">📁</div>
-                        <div class="upload-text">
-                            <p>Drop files here or click to browse</p>
-                            <p class="upload-subtext">Supports binary files (.pb, .bin) and JSON files (.json)</p>
-                        </div>
-                    </div>
-                    <input type="file" id="file-input" class="file-input" accept=".pb,.bin,.json">
-                    <button class="btn-primary upload-btn" id="upload-btn">Choose Files</button>
-                </div>
-
-                <!-- Text Input Area -->
-                <div class="text-input-area">
-                    <label for="text-input">Or paste content directly:</label>
-                    <textarea id="text-input" class="text-input" placeholder="Paste your data here..." rows="6"></textarea>
-                    <div class="text-input-actions">
-                        <button class="btn-secondary" id="clear-text-btn">
-                            🗑️ Clear Text
-                        </button>
-                        <button class="btn-secondary" id="format-text-btn">
-                            📋 Format Text
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Data Format Options (for parse mode) -->
-                <div class="format-options" id="format-options">
-                    <label>Input Format:</label>
-                    <div class="format-radios">
-                        <label class="radio-label">
-                            <input type="radio" name="input-format" value="binary" checked>
-                            <span>Binary</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="input-format" value="base64">
-                            <span>Base64</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="input-format" value="hex">
-                            <span>Hex</span>
-                        </label>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Action Button -->
-            <div class="action-section">
-                <button class="action-btn" id="process-btn" disabled>
-                    <span class="btn-icon">▶️</span>
-                    <span class="btn-text">Process Data</span>
-                </button>
+                <button class="upload-btn" id="upload-btn" title="上传文件">📁</button>
+                <input type="file" id="file-input" class="file-input" accept=".pb,.bin,.json">
             </div>
-        </main>
+            <textarea id="text-input" class="text-input" placeholder="粘贴 Hex / Base64 数据，或拖拽 .pb 文件到这里" rows="6"></textarea>
+        </div>
+
+        <!-- Action Button -->
+        <div class="action-section">
+            <button class="action-btn" id="process-btn" disabled>
+                <span class="btn-icon">▶</span>
+                <span class="btn-text">解析</span>
+            </button>
+        </div>
 
         <!-- Result Section -->
-        <section class="result-section" id="result-section" style="display: none;">
+        <div class="result-section" id="result-section" style="display: none;">
             <div class="result-header">
-                <h3 id="result-title">Processing Result</h3>
+                <span class="result-title" id="result-title">解析结果</span>
                 <div class="result-actions">
-                    <button class="btn-icon" id="copy-result-btn" title="Copy Result">
-                        📋
-                    </button>
-                    <button class="btn-icon" id="download-result-btn" title="Download Result">
-                        💾
-                    </button>
-                    <button class="btn-icon" id="clear-result-btn" title="Clear Result">
-                        🗑️
-                    </button>
+                    <button class="result-action-btn" id="copy-result-btn" title="复制">📋</button>
+                    <button class="result-action-btn" id="download-result-btn" title="下载">💾</button>
                 </div>
             </div>
-
-            <div class="result-tabs">
-                <button class="tab-btn active" data-tab="result">
-                    📊 Result
-                </button>
-                <button class="tab-btn" data-tab="debug">
-                    🐛 Debug Info
-                </button>
-                <button class="tab-btn" data-tab="raw">
-                    📄 Raw Data
-                </button>
-            </div>
-
-            <div class="tab-content">
-                <div class="tab-pane active" id="result-tab">
-                    <div class="result-content" id="result-content">
-                        <div class="loading-spinner">
-                            <div class="spinner"></div>
-                            <p>Processing...</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="tab-pane" id="debug-tab">
-                    <div class="debug-content" id="debug-content">
-                        <div class="placeholder-text">Debug information will appear here</div>
-                    </div>
-                </div>
-                <div class="tab-pane" id="raw-tab">
-                    <div class="raw-content" id="raw-content">
-                        <pre class="raw-data">Raw data will appear here</pre>
-                    </div>
-                </div>
-            </div>
-        </section>
+            <div class="result-content" id="result-content"></div>
+        </div>
     </div>
 
     <!-- Schema Manager Modal -->
@@ -202,45 +80,16 @@
         <div class="modal-backdrop" id="modal-backdrop"></div>
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Schema Manager</h3>
-                <button class="btn-icon close-modal" id="close-modal-btn" title="Close">
-                    ✕
-                </button>
+                <h3>Schema 管理</h3>
+                <button class="modal-close" id="close-modal-btn">✕</button>
             </div>
-
             <div class="modal-body">
-                <!-- Schema List -->
-                <div class="schema-list-section">
-                    <h4>Available Schemas</h4>
-                    <div class="schema-list" id="schema-list">
-                        <div class="schema-list-item">
-                            <div class="schema-info">
-                                <span class="schema-list-name">Example Schema</span>
-                                <span class="schema-list-meta">v1.0 • 2 days ago</span>
-                            </div>
-                            <div class="schema-list-actions">
-                                <button class="btn-icon use-schema-btn" title="Use Schema">
-                                    ✓
-                                </button>
-                                <button class="btn-icon edit-schema-btn" title="Edit Schema">
-                                    ✏️
-                                </button>
-                                <button class="btn-icon delete-schema-btn" title="Delete Schema">
-                                    🗑️
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                <div class="schema-list" id="schema-list">
+                    <div class="empty-schema-list">暂无 Schema，点击下方加载示例开始</div>
                 </div>
-
-                <!-- Schema Actions -->
-                <div class="schema-manager-actions">
-                    <button class="btn-primary" id="import-schema-btn">
-                        📥 Import Schema
-                    </button>
-                    <button class="btn-secondary" id="export-schema-btn">
-                        📤 Export All
-                    </button>
+                <div class="modal-actions">
+                    <button class="modal-action-btn primary" id="import-schema-btn">📥 导入</button>
+                    <button class="modal-action-btn" id="export-schema-btn">📤 导出全部</button>
                 </div>
             </div>
         </div>
