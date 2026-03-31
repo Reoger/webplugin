@@ -338,18 +338,21 @@
         const textarea = $('text-input');
         const processBtn = $('process-btn');
         const formatPills = document.querySelector('.format-pills');
+        const fileInput = $('file-input');
 
         if (mode === 'parse') {
             textarea.placeholder = '粘贴 Hex / Base64 数据，或拖拽 .pb 文件到这里';
             processBtn.querySelector('.btn-text').textContent = '解析';
             formatPills.style.display = 'flex';
+            fileInput.accept = '.pb,.bin,.proto,.dat,.bin';
         } else {
-            textarea.placeholder = '粘贴 JSON 数据...';
+            textarea.placeholder = '粘贴 JSON 数据，或拖拽 .json 文件到这里';
             processBtn.querySelector('.btn-text').textContent = '编码';
             formatPills.style.display = 'none';
+            fileInput.accept = '.json,.txt';
         }
 
-        // Clear result
+        // Clear result & input
         $('result-section').style.display = 'none';
         state.parsedData = null;
     }
@@ -528,15 +531,31 @@ message User {
 
     function handleFile(file) {
         if (file.size > 10 * 1024 * 1024) { showToast('文件过大（最大 10MB）', 'error'); return; }
-        const reader = new FileReader();
-        reader.onload = e => {
-            state.inputData = new Uint8Array(e.target.result);
-            state.inputType = 'file';
-            $('text-input').value = `[文件] ${file.name} (${formatBytes(file.size)})`;
-            updateProcessBtn();
-            showToast(`已加载 ${file.name}`, 'success');
-        };
-        reader.readAsArrayBuffer(file);
+
+        if (state.currentMode === 'encode') {
+            // Encode mode: read as text (JSON)
+            const reader = new FileReader();
+            reader.onload = e => {
+                const text = e.target.result;
+                state.inputData = text;
+                state.inputType = 'text';
+                $('text-input').value = text;
+                updateProcessBtn();
+                showToast(`已加载 ${file.name}`, 'success');
+            };
+            reader.readAsText(file);
+        } else {
+            // Parse mode: read as binary
+            const reader = new FileReader();
+            reader.onload = e => {
+                state.inputData = new Uint8Array(e.target.result);
+                state.inputType = 'file';
+                $('text-input').value = `[文件] ${file.name} (${formatBytes(file.size)})`;
+                updateProcessBtn();
+                showToast(`已加载 ${file.name}`, 'success');
+            };
+            reader.readAsArrayBuffer(file);
+        }
     }
 
     function downloadBlob(blob, filename) {
