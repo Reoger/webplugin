@@ -414,19 +414,15 @@ message User {
             });
         });
 
-        // File upload button — dynamically create input
+        // File upload — use hidden file input from HTML (visually-hidden, not display:none)
         $('upload-btn').addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '*/*';
-            input.onchange = e => {
-                const file = e.target.files[0];
-                if (file) handleFile(file);
-            };
-            document.body.appendChild(input);
-            input.click();
-            // Clean up after dialog closes
-            setTimeout(() => input.remove(), 1000);
+            const fileInput = $('file-input');
+            fileInput.value = '';
+            fileInput.click();
+        });
+        $('file-input').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) handleFile(file);
         });
 
         // Text input

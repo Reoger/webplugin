@@ -210,6 +210,15 @@ body {
 }
 .upload-btn:hover { border-color: var(--primary); }
 
+.visually-hidden {
+    position: fixed;
+    top: -100px;
+    left: -100px;
+    width: 1px;
+    height: 1px;
+    opacity: 0.01;
+}
+
 .text-input {
     width: 100%;
     padding: 10px;
