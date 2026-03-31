@@ -414,12 +414,7 @@ message User {
             });
         });
 
-        // File upload — use hidden file input from HTML (visually-hidden, not display:none)
-        $('upload-btn').addEventListener('click', () => {
-            const fileInput = $('file-input');
-            fileInput.value = '';
-            fileInput.click();
-        });
+        // File upload — <label for="file-input"> triggers it natively
         $('file-input').addEventListener('change', e => {
             const file = e.target.files[0];
             if (file) handleFile(file);
