@@ -221,7 +221,7 @@ const ProtoWrapper = (function() {
                 // 解析字段定义
                 // 支持格式：optional string name = 1;
                 // 支持格式：string name = 1;
-                const fieldMatch = trimmed.match(/(?:optional|repeated|required)?\s*(\w+)\s+(\w+)\s*=\s*(\d+);?/);
+                const fieldMatch = trimmed.match(/(optional|repeated|required)?\s*(\w+)\s+(\w+)\s*=\s*(\d+);?/);
                 if (fieldMatch) {
                     const [, rule, type, name, num] = fieldMatch;
                     const fieldNumber = parseInt(num);
