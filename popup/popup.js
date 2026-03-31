@@ -122,23 +122,62 @@
 
     function importSchemas() {
         const input = document.createElement('input');
-        input.type = 'file'; input.accept = '.json';
+        input.type = 'file';
+        input.accept = '.proto,.json,.pb,.bin,.txt';
+        input.multiple = true;
         input.onchange = e => {
-            const file = e.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = ev => {
-                try {
-                    const imported = JSON.parse(ev.target.result);
-                    if (!Array.isArray(imported)) throw new Error('Invalid format');
-                    imported.forEach(s => {
-                        if (s.id && s.name && s.content) {
-                            state.schemas.push({ ...s, id: uuid(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+            const files = Array.from(e.target.files);
+            if (!files.length) return;
+
+            let imported = 0;
+            let failed = 0;
+
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    try {
+                        const text = ev.target.result;
+                        const ext = file.name.split('.').pop().toLowerCase();
+
+                        if (ext === 'json') {
+                            // JSON 格式的 Schema 导出文件
+                            const data = JSON.parse(text);
+                            const items = Array.isArray(data) ? data : [data];
+                            items.forEach(s => {
+                                if (s.name && s.content) {
+                                    state.schemas.push({ ...s, id: uuid(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+                                    imported++;
+                                }
+                            });
+                        } else {
+                            // .proto 文件 — 直接作为 Schema 内容
+                            const name = file.name.replace(/\.[^.]+$/, '');
+                            state.schemas.push({
+                                id: uuid(),
+                                name: name,
+                                content: text,
+                                createdAt: new Date().toISOString(),
+                                updatedAt: new Date().toISOString()
+                            });
+                            imported++;
                         }
-                    });
-                    saveSchemas().then(() => { updateSchemaSelect(); updateSchemaList(); showToast(`已导入 ${imported.length} 个 Schema`, 'success'); });
-                } catch (err) { showToast('导入失败: 无效文件', 'error'); }
-            };
-            reader.readAsText(file);
+                    } catch (err) {
+                        console.error('Import failed for', file.name, err);
+                        failed++;
+                    }
+
+                    // 最后一个文件读完后保存
+                    if (imported + failed === files.length) {
+                        saveSchemas().then(() => {
+                            updateSchemaSelect();
+                            updateSchemaList();
+                            if (imported > 0) showToast(`已导入 ${imported} 个 Schema`, 'success');
+                            if (failed > 0) showToast(`${failed} 个文件导入失败`, 'error');
+                        });
+                    }
+                };
+                reader.readAsText(file);
+            });
         };
         input.click();
     }
