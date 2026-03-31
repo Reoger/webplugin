@@ -418,7 +418,7 @@ message User {
         $('upload-btn').addEventListener('click', () => {
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = state.currentMode === 'parse' ? '*' : '.json,.txt';
+            // 不设 accept，允许选择所有文件类型（.pb/.bin/.json 等）
             input.onchange = e => {
                 const file = e.target.files[0];
                 if (file) handleFile(file);
