@@ -210,10 +210,6 @@ body {
 }
 .upload-btn:hover { border-color: var(--primary); }
 
-.file-input {
-    display: none;
-}
-
 .text-input {
     width: 100%;
     padding: 10px;

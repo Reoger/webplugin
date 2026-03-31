@@ -338,18 +338,15 @@
         const textarea = $('text-input');
         const processBtn = $('process-btn');
         const formatPills = document.querySelector('.format-pills');
-        const fileInput = $('file-input');
 
         if (mode === 'parse') {
             textarea.placeholder = '粘贴 Hex / Base64 数据，或拖拽 .pb 文件到这里';
             processBtn.querySelector('.btn-text').textContent = '解析';
             formatPills.style.display = 'flex';
-            fileInput.accept = '.pb,.bin,.proto,.dat,.bin';
         } else {
             textarea.placeholder = '粘贴 JSON 数据，或拖拽 .json 文件到这里';
             processBtn.querySelector('.btn-text').textContent = '编码';
             formatPills.style.display = 'none';
-            fileInput.accept = '.json,.txt';
         }
 
         // Clear result & input
@@ -373,8 +370,14 @@
             btn.addEventListener('click', () => switchMode(btn.dataset.mode));
         });
 
-        // Load example schema
+        // Load example schema (in modal now)
         $('load-example-btn').addEventListener('click', () => {
+            const exampleName = 'Example User Schema';
+            // Duplicate check
+            if (state.schemas.some(s => s.name === exampleName)) {
+                showToast('示例 Schema 已存在', 'warning');
+                return;
+            }
             const exampleSchema = `syntax = "proto3";
 
 message User {
@@ -383,7 +386,7 @@ message User {
   string email = 3;
   bool is_active = 4;
 }`;
-            addSchema('Example User Schema', exampleSchema)
+            addSchema(exampleName, exampleSchema)
                 .then(schema => {
                     $('schema-select').value = schema.id;
                     selectSchema(schema.id);
@@ -411,11 +414,16 @@ message User {
             });
         });
 
-        // File upload button
-        $('upload-btn').addEventListener('click', () => $('file-input').click());
-        $('file-input').addEventListener('change', e => {
-            const file = e.target.files[0];
-            if (file) handleFile(file);
+        // File upload button — dynamically create input to avoid display:none issues
+        $('upload-btn').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = state.currentMode === 'parse' ? '*' : '.json,.txt';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (file) handleFile(file);
+            };
+            input.click();
         });
 
         // Text input

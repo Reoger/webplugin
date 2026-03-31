@@ -24,9 +24,8 @@
                 </div>
             </div>
             <div class="settings-section">
-                <div class="settings-label">Schema 管理</div>
+                <div class="settings-label">Schema</div>
                 <div class="settings-actions">
-                    <button class="settings-action-btn" id="load-example-btn">📝 加载示例</button>
                     <button class="settings-action-btn" id="schema-manager-btn">📋 管理列表</button>
                 </div>
             </div>
@@ -49,7 +48,6 @@
                     <button class="format-pill" data-format="binary">Binary</button>
                 </div>
                 <button class="upload-btn" id="upload-btn" title="上传文件">📁</button>
-                <input type="file" id="file-input" class="file-input">
             </div>
             <textarea id="text-input" class="text-input" placeholder="粘贴 Hex / Base64 数据，或拖拽 .pb 文件到这里" rows="6"></textarea>
         </div>
@@ -88,6 +86,7 @@
                     <div class="empty-schema-list">暂无 Schema，点击下方加载示例开始</div>
                 </div>
                 <div class="modal-actions">
+                    <button class="modal-action-btn" id="load-example-btn">📝 加载示例</button>
                     <button class="modal-action-btn primary" id="import-schema-btn">📥 导入</button>
                     <button class="modal-action-btn" id="export-schema-btn">📤 导出全部</button>
                 </div>
