@@ -123,44 +123,109 @@ const ProtoWrapper = (function() {
         return result;
     }
 
-    function encodeProtobuf(json) {
+    function encodeProtobuf(json, schema) {
         const buffers = [];
 
-        for (const [fieldNum, value] of Object.entries(json)) {
-            const fieldNumber = parseInt(fieldNum);
-
-            if (typeof value === 'number') {
-                const tag = (fieldNumber << 3) | WireType.VARINT;
-                buffers.push(...encodeVarint(tag));
-                buffers.push(...encodeVarint(value));
-            } else if (typeof value === 'string') {
-                const tag = (fieldNumber << 3) | WireType.LENGTH_DELIMITED;
-                buffers.push(...encodeVarint(tag));
-                const bytes = new TextEncoder().encode(value);
-                buffers.push(...encodeVarint(bytes.length));
-                buffers.push(...Array.from(bytes));
-            } else if (typeof value === 'boolean') {
-                const tag = (fieldNumber << 3) | WireType.VARINT;
-                buffers.push(...encodeVarint(tag));
-                buffers.push(...encodeVarint(value ? 1 : 0));
-            } else if (Array.isArray(value)) {
-                value.forEach(item => {
-                    if (typeof item === 'number') {
-                        const tag = (fieldNumber << 3) | WireType.VARINT;
-                        buffers.push(...encodeVarint(tag));
-                        buffers.push(...encodeVarint(item));
-                    } else if (typeof item === 'string') {
-                        const tag = (fieldNumber << 3) | WireType.LENGTH_DELIMITED;
-                        buffers.push(...encodeVarint(tag));
-                        const bytes = new TextEncoder().encode(item);
-                        buffers.push(...encodeVarint(bytes.length));
-                        buffers.push(...Array.from(bytes));
-                    }
-                });
+        // Build name→number reverse map from schema if available
+        const nameToNum = {};
+        const nameToDef = {};
+        if (schema && typeof schema === 'object') {
+            for (const [num, def] of Object.entries(schema)) {
+                if (def && def.name) {
+                    nameToNum[def.name] = parseInt(num);
+                    nameToDef[def.name] = def;
+                }
             }
         }
 
+        for (const [key, value] of Object.entries(json)) {
+            // Resolve field name → number, or use key directly if numeric
+            let fieldNumber = parseInt(key);
+            let fieldDef = null;
+
+            if (isNaN(fieldNumber)) {
+                // Key is a field name, look up number from schema
+                fieldNumber = nameToNum[key];
+                fieldDef = nameToDef[key];
+                if (fieldNumber === undefined) {
+                    continue; // Unknown field, skip
+                }
+            } else {
+                // Key is already a number, look up def
+                fieldDef = schema ? schema[fieldNumber] : null;
+            }
+
+            const wireType = guessWireType(value, fieldDef);
+            const tag = (fieldNumber << 3) | wireType;
+            buffers.push(...encodeVarint(tag));
+            buffers.push(...encodeValue(value, wireType, fieldDef));
+        }
+
         return new Uint8Array(buffers);
+    }
+
+    function guessWireType(value, fieldDef) {
+        if (fieldDef) {
+            const t = fieldDef.type;
+            if (t === 'int32' || t === 'int64' || t === 'uint32' || t === 'uint64' ||
+                t === 'sint32' || t === 'sint64' || t === 'bool' || t === 'enum') {
+                return WireType.VARINT;
+            }
+            if (t === 'fixed32' || t === 'sfixed32' || t === 'float') {
+                return WireType.BIT32;
+            }
+            if (t === 'fixed64' || t === 'sfixed64' || t === 'double') {
+                return WireType.BIT64;
+            }
+            if (t === 'string' || t === 'bytes') {
+                return WireType.LENGTH_DELIMITED;
+            }
+            // Nested message types
+            if (t !== 'string' && t !== 'bytes' && /^[A-Z]/.test(t)) {
+                return WireType.LENGTH_DELIMITED;
+            }
+        }
+        // Fallback: guess from JS type
+        if (typeof value === 'boolean') return WireType.VARINT;
+        if (typeof value === 'number') return WireType.VARINT;
+        if (typeof value === 'string') return WireType.LENGTH_DELIMITED;
+        if (typeof value === 'object' && value !== null) return WireType.LENGTH_DELIMITED;
+        return WireType.VARINT;
+    }
+
+    function encodeValue(value, wireType, fieldDef) {
+        const buffers = [];
+
+        if (typeof value === 'boolean') {
+            buffers.push(...encodeVarint(value ? 1 : 0));
+        } else if (typeof value === 'number') {
+            if (wireType === WireType.BIT32) {
+                const view = new DataView(new ArrayBuffer(4));
+                view.setUint32(0, value, true);
+                for (let i = 0; i < 4; i++) buffers.push(view.getUint8(i));
+            } else if (wireType === WireType.BIT64) {
+                const view = new DataView(new ArrayBuffer(8));
+                view.setFloat64(0, value, true);
+                for (let i = 0; i < 8; i++) buffers.push(view.getUint8(i));
+            } else {
+                buffers.push(...encodeVarint(value));
+            }
+        } else if (typeof value === 'string') {
+            const bytes = new TextEncoder().encode(value);
+            buffers.push(...encodeVarint(bytes.length));
+            buffers.push(...Array.from(bytes));
+        } else if (Array.isArray(value)) {
+            // Byte array
+            buffers.push(...encodeVarint(value.length));
+            buffers.push(...value);
+        } else if (typeof value === 'object' && value !== null) {
+            // Nested message — encode recursively
+            const nestedBytes = encodeProtobuf(value, null); // TODO: pass nested schema
+            buffers.push(...encodeVarint(nestedBytes.length));
+            buffers.push(...Array.from(nestedBytes));
+        }
+
+        return buffers;
     }
 
     function parseSchema(schemaText) {
@@ -208,7 +273,7 @@ const ProtoWrapper = (function() {
             return parseProtobuf(buffer);
         },
         encode: function(json, schema) {
-            return encodeProtobuf(json);
+            return encodeProtobuf(json, schema);
         }
     };
 })();
