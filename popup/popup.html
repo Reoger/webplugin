@@ -37,6 +37,15 @@
             <select id="schema-select" class="schema-select">
                 <option value="">-- 选择 Schema --</option>
             </select>
+            <button class="preview-schema-btn" id="preview-schema-btn" title="预览 Schema" style="display:none;">👁</button>
+        </div>
+
+        <!-- Message Row (shown only when schema has multiple messages) -->
+        <div class="schema-row message-row" id="message-row" style="display:none;">
+            <span class="schema-label">Message</span>
+            <select id="message-select" class="schema-select">
+                <option value="">-- 选择 Message --</option>
+            </select>
         </div>
 
         <!-- Input Area -->
@@ -83,8 +92,19 @@
                 <button class="modal-close" id="close-modal-btn">✕</button>
             </div>
             <div class="modal-body">
-                <div class="schema-list" id="schema-list">
-                    <div class="empty-schema-list">暂无 Schema，点击下方加载示例开始</div>
+                <!-- Schema Preview -->
+                <div class="schema-preview" id="schema-preview" style="display:none;">
+                    <div class="schema-preview-header">
+                        <span class="preview-title" id="preview-name"></span>
+                        <button class="preview-close" id="close-preview-btn" title="关闭预览">✕</button>
+                    </div>
+                    <pre class="schema-preview-content" id="preview-content"></pre>
+                </div>
+                <!-- Schema List -->
+                <div class="schema-list-wrap" id="schema-list-wrap">
+                    <div class="schema-list" id="schema-list">
+                        <div class="empty-schema-list">暂无 Schema，点击下方加载示例开始</div>
+                    </div>
                 </div>
                 <div class="modal-actions">
                     <button class="modal-action-btn" id="load-example-btn">📝 加载示例</button>

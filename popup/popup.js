@@ -6,10 +6,13 @@
     const state = {
         currentMode: 'parse',  // 'parse' | 'encode'
         selectedSchema: null,
+        selectedMessage: null,  // message type name
         schemas: [],
-        inputData: '',
-        inputType: null,       // 'text' | 'file'
-        inputFormat: 'hex',    // 'hex' | 'base64' | 'binary'
+        // Per-mode input state
+        inputs: {
+            parse:  { data: '', type: null, format: 'hex' },
+            encode: { data: '', type: null, format: 'json' }
+        },
         parsedData: null
     };
 
@@ -212,6 +215,7 @@
                 </div>
                 <div class="schema-list-actions">
                     <button class="list-action-btn use" data-action="use" title="使用">✓</button>
+                    <button class="list-action-btn preview" data-action="preview" title="预览">👁</button>
                     <button class="list-action-btn edit" data-action="edit" title="编辑">✏</button>
                     <button class="list-action-btn delete" data-action="delete" title="删除">✕</button>
                 </div>
@@ -221,26 +225,77 @@
 
     function updateProcessBtn() {
         const btn = $('process-btn');
+        const currentInput = state.inputs[state.currentMode];
         const hasSchema = !!state.selectedSchema;
-        const hasData = !!(state.inputData);
+        const hasData = !!(currentInput.data);
         btn.disabled = !(hasSchema && hasData);
     }
 
     // ---- Schema Selection ----
 
-    function selectSchema(schemaId) {
-        if (!schemaId) { state.selectedSchema = null; updateProcessBtn(); return; }
+    function selectSchema(schemaId, messageName) {
+        if (!schemaId) {
+            state.selectedSchema = null; state.selectedMessage = null;
+            hideMessageRow();
+            $('preview-schema-btn').style.display = 'none';
+            updateProcessBtn();
+            return;
+        }
         const schema = state.schemas.find(s => s.id === schemaId);
-        if (!schema) { state.selectedSchema = null; updateProcessBtn(); return; }
+        if (!schema) {
+            state.selectedSchema = null; state.selectedMessage = null;
+            hideMessageRow();
+            $('preview-schema-btn').style.display = 'none';
+            updateProcessBtn();
+            return;
+        }
 
         try {
             const root = ProtoWrapper.parse(schema.content);
             state.selectedSchema = { ...schema, messages: root.messages };
+
+            const msgNames = Object.keys(root.messages);
+            if (msgNames.length > 1) {
+                showMessageRow(msgNames, messageName);
+            } else {
+                hideMessageRow();
+                state.selectedMessage = msgNames[0] || null;
+            }
+
+            // Show preview button
+            $('preview-schema-btn').style.display = '';
         } catch (e) {
             showToast('Schema 解析失败', 'error');
             state.selectedSchema = null;
+            state.selectedMessage = null;
+            hideMessageRow();
         }
         updateProcessBtn();
+    }
+
+    function showMessageRow(msgNames, selectedName) {
+        const row = $('message-row');
+        const sel = $('message-select');
+        sel.innerHTML = '<option value="">-- 选择 Message --</option>';
+        msgNames.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            sel.appendChild(opt);
+        });
+        if (selectedName && msgNames.includes(selectedName)) {
+            sel.value = selectedName;
+            state.selectedMessage = selectedName;
+        } else {
+            sel.value = msgNames[0];
+            state.selectedMessage = msgNames[0];
+        }
+        row.style.display = '';
+    }
+
+    function hideMessageRow() {
+        $('message-row').style.display = 'none';
+        $('message-select').innerHTML = '<option value="">-- 选择 Message --</option>';
     }
 
     // ---- Core: Parse & Encode ----
@@ -248,16 +303,17 @@
     async function parseProtoToJson(data) {
         if (!state.selectedSchema) throw new Error('请先选择 Schema');
 
+        const currentInput = state.inputs[state.currentMode];
         let buffer;
-        if (state.inputType === 'file') {
+        if (currentInput.type === 'file') {
             buffer = data;
         } else {
             const text = data.trim();
-            if (state.inputFormat === 'base64') {
+            if (currentInput.format === 'base64') {
                 const binary = atob(text.replace(/\s/g, ''));
                 buffer = new Uint8Array(binary.length);
                 for (let i = 0; i < binary.length; i++) buffer[i] = binary.charCodeAt(i);
-            } else if (state.inputFormat === 'hex') {
+            } else if (currentInput.format === 'hex') {
                 const clean = text.replace(/\s/g, '');
                 if (clean.length % 2 !== 0) throw new Error('Hex 长度必须为偶数');
                 buffer = new Uint8Array(clean.length / 2);
@@ -275,7 +331,7 @@
         const messageTypes = root.messages;
         if (!messageTypes || !Object.keys(messageTypes).length) throw new Error('Schema 中没有消息类型');
 
-        const messageType = Object.keys(messageTypes)[0];
+        const messageType = state.selectedMessage || Object.keys(messageTypes)[0];
         const decoded = ProtoWrapper.decode(buffer, messageTypes[messageType]);
 
         return { success: true, messageType, data: decoded };
@@ -284,8 +340,9 @@
     async function encodeJsonToProto(data) {
         if (!state.selectedSchema) throw new Error('请先选择 Schema');
 
+        const currentInput = state.inputs[state.currentMode];
         let jsonData;
-        if (state.inputType === 'file') {
+        if (currentInput.type === 'file') {
             jsonData = JSON.parse(new TextDecoder().decode(data));
         } else {
             jsonData = JSON.parse(data.trim());
@@ -295,7 +352,7 @@
         const messageTypes = root.messages;
         if (!messageTypes || !Object.keys(messageTypes).length) throw new Error('Schema 中没有消息类型');
 
-        const messageType = Object.keys(messageTypes)[0];
+        const messageType = state.selectedMessage || Object.keys(messageTypes)[0];
         const buffer = ProtoWrapper.encode(jsonData, messageTypes[messageType]);
 
         return {
@@ -366,6 +423,13 @@
     // ---- Mode Switching ----
 
     function switchMode(mode) {
+        if (mode === state.currentMode) return;
+
+        // Save current input to old mode
+        const oldInput = state.inputs[state.currentMode];
+        const textarea = $('text-input');
+        oldInput.data = textarea.value;
+
         state.currentMode = mode;
 
         // Update mode buttons
@@ -373,8 +437,15 @@
             btn.classList.toggle('active', btn.dataset.mode === mode);
         });
 
+        // Restore input from new mode
+        const newInput = state.inputs[mode];
+        textarea.value = newInput.type === 'file' && newInput.data instanceof Uint8Array
+            ? '' : (newInput.data || '');
+        if (newInput.type === 'file' && newInput.data instanceof Uint8Array) {
+            textarea.value = `[文件数据已保存，大小: ${formatBytes(newInput.data.length)}]`;
+        }
+
         // Update UI labels
-        const textarea = $('text-input');
         const processBtn = $('process-btn');
         const formatPills = document.querySelector('.format-pills');
 
@@ -382,15 +453,20 @@
             textarea.placeholder = '粘贴 Hex / Base64 数据，或拖拽 .pb 文件到这里';
             processBtn.querySelector('.btn-text').textContent = '解析';
             formatPills.style.display = 'flex';
+            // Restore format pills
+            document.querySelectorAll('.format-pill').forEach(p => {
+                p.classList.toggle('active', p.dataset.format === newInput.format);
+            });
         } else {
             textarea.placeholder = '粘贴 JSON 数据，或拖拽 .json 文件到这里';
             processBtn.querySelector('.btn-text').textContent = '编码';
             formatPills.style.display = 'none';
         }
 
-        // Clear result & input
+        // Clear result
         $('result-section').style.display = 'none';
         state.parsedData = null;
+        updateProcessBtn();
     }
 
     // ---- Event Setup ----
@@ -436,12 +512,29 @@ message User {
 
         // Schema manager button
         $('schema-manager-btn').addEventListener('click', () => {
+            hideSchemaPreview(); // reset to list view
             $('schema-manager-modal').classList.add('active');
         });
 
         // Schema select dropdown
         $('schema-select').addEventListener('change', function() {
             selectSchema(this.value);
+            saveLastSelection();
+        });
+
+        // Message select dropdown
+        $('message-select').addEventListener('change', function() {
+            state.selectedMessage = this.value || null;
+            updateProcessBtn();
+            saveLastSelection();
+        });
+
+        // Preview schema button (inline — opens modal with preview)
+        $('preview-schema-btn').addEventListener('click', () => {
+            if (state.selectedSchema) {
+                showSchemaPreview(state.selectedSchema.name, state.selectedSchema.content);
+                $('schema-manager-modal').classList.add('active');
+            }
         });
 
         // Format pills
@@ -449,7 +542,7 @@ message User {
             pill.addEventListener('click', () => {
                 document.querySelectorAll('.format-pill').forEach(p => p.classList.remove('active'));
                 pill.classList.add('active');
-                state.inputFormat = pill.dataset.format;
+                state.inputs[state.currentMode].format = pill.dataset.format;
             });
         });
 
@@ -461,8 +554,9 @@ message User {
 
         // Text input
         $('text-input').addEventListener('input', e => {
-            state.inputData = e.target.value;
-            state.inputType = 'text';
+            const currentInput = state.inputs[state.currentMode];
+            currentInput.data = e.target.value;
+            currentInput.type = 'text';
             updateProcessBtn();
         });
 
@@ -479,7 +573,8 @@ message User {
 
         // Process button
         $('process-btn').addEventListener('click', async () => {
-            if (!state.selectedSchema || !state.inputData) return;
+            const currentInput = state.inputs[state.currentMode];
+            if (!state.selectedSchema || !currentInput.data) return;
 
             const btn = $('process-btn');
             btn.disabled = true;
@@ -488,11 +583,11 @@ message User {
 
             try {
                 if (state.currentMode === 'parse') {
-                    const result = await parseProtoToJson(state.inputData);
+                    const result = await parseProtoToJson(currentInput.data);
                     displayJsonResult(result.data, result.messageType);
                     showToast('解析成功', 'success');
                 } else {
-                    const result = await encodeJsonToProto(state.inputData);
+                    const result = await encodeJsonToProto(currentInput.data);
                     displayEncodeResult(result);
                     showToast('编码成功', 'success');
                 }
@@ -537,8 +632,12 @@ message User {
             if (action === 'use') {
                 $('schema-select').value = id;
                 selectSchema(id);
+                saveLastSelection();
                 $('schema-manager-modal').classList.remove('active');
                 showToast('Schema 已选择', 'success');
+            } else if (action === 'preview') {
+                const schema = state.schemas.find(s => s.id === id);
+                if (schema) showSchemaPreview(schema.name, schema.content);
             } else if (action === 'edit') {
                 const schema = state.schemas.find(s => s.id === id);
                 if (!schema) return;
@@ -557,6 +656,9 @@ message User {
             }
         });
 
+        // Close preview button
+        $('close-preview-btn').addEventListener('click', hideSchemaPreview);
+
         // Import / Export
         $('import-schema-btn').addEventListener('click', importSchemas);
         $('export-schema-btn').addEventListener('click', exportSchemas);
@@ -573,13 +675,15 @@ message User {
     function handleFile(file) {
         if (file.size > 10 * 1024 * 1024) { showToast('文件过大（最大 10MB）', 'error'); return; }
 
+        const currentInput = state.inputs[state.currentMode];
+
         if (state.currentMode === 'encode') {
             // Encode mode: read as text (JSON)
             const reader = new FileReader();
             reader.onload = e => {
                 const text = e.target.result;
-                state.inputData = text;
-                state.inputType = 'text';
+                currentInput.data = text;
+                currentInput.type = 'text';
                 $('text-input').value = text;
                 updateProcessBtn();
                 showToast(`已加载 ${file.name}`, 'success');
@@ -589,8 +693,8 @@ message User {
             // Parse mode: read as binary
             const reader = new FileReader();
             reader.onload = e => {
-                state.inputData = new Uint8Array(e.target.result);
-                state.inputType = 'file';
+                currentInput.data = new Uint8Array(e.target.result);
+                currentInput.type = 'file';
                 $('text-input').value = `[文件] ${file.name} (${formatBytes(file.size)})`;
                 updateProcessBtn();
                 showToast(`已加载 ${file.name}`, 'success');
@@ -606,12 +710,55 @@ message User {
         URL.revokeObjectURL(url);
     }
 
+    // ---- Schema Preview ----
+
+    function showSchemaPreview(name, content) {
+        $('preview-name').textContent = name;
+        $('preview-content').textContent = content;
+        $('schema-preview').style.display = 'block';
+        $('schema-list-wrap').style.display = 'none';
+    }
+
+    function hideSchemaPreview() {
+        $('schema-preview').style.display = 'none';
+        $('schema-list-wrap').style.display = 'block';
+    }
+
+    // ---- Persistence ----
+
+    function saveLastSelection() {
+        chrome.storage.local.set({
+            lastSchemaId: state.selectedSchema ? state.selectedSchema.id : '',
+            lastMessageName: state.selectedMessage || ''
+        });
+    }
+
+    function restoreLastSelection() {
+        chrome.storage.local.get(['lastSchemaId', 'lastMessageName'], result => {
+            if (result.lastSchemaId && state.schemas.some(s => s.id === result.lastSchemaId)) {
+                $('schema-select').value = result.lastSchemaId;
+                selectSchema(result.lastSchemaId, result.lastMessageName);
+            }
+        });
+    }
+
     // ---- Init ----
 
     function init() {
         setupEvents();
-        loadSchemas().catch(e => console.error('Failed to load schemas:', e));
-        switchMode('parse');
+        loadSchemas()
+            .then(() => restoreLastSelection())
+            .catch(e => console.error('Failed to load schemas:', e));
+
+        // Initial UI setup for parse mode
+        const textarea = $('text-input');
+        const processBtn = $('process-btn');
+        textarea.placeholder = '粘贴 Hex / Base64 数据，或拖拽 .pb 文件到这里';
+        processBtn.querySelector('.btn-text').textContent = '解析';
+        document.querySelectorAll('.format-pill').forEach(p => {
+            p.classList.toggle('active', p.dataset.format === 'hex');
+        });
+        $('preview-schema-btn').style.display = 'none';
     }
 
     if (document.readyState === 'loading') {
