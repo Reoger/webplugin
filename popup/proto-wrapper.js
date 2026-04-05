@@ -125,6 +125,7 @@ const ProtoWrapper = (function() {
 
     function encodeProtobuf(json, schema) {
         const buffers = [];
+        const errors = [];
 
         // Build name→number reverse map from schema if available
         const nameToNum = {};
@@ -155,13 +156,50 @@ const ProtoWrapper = (function() {
                 fieldDef = schema ? schema[fieldNumber] : null;
             }
 
+            // Validate type match
+            if (fieldDef) {
+                const err = validateFieldType(key, value, fieldDef);
+                if (err) { errors.push(err); continue; }
+            }
+
             const wireType = guessWireType(value, fieldDef);
             const tag = (fieldNumber << 3) | wireType;
             buffers.push(...encodeVarint(tag));
             buffers.push(...encodeValue(value, wireType, fieldDef));
         }
 
+        if (errors.length > 0) {
+            throw new Error('编码类型错误:\n' + errors.join('\n'));
+        }
+
         return new Uint8Array(buffers);
+    }
+
+    function validateFieldType(fieldName, value, fieldDef) {
+        const t = fieldDef.type;
+
+        // bool
+        if (t === 'bool') {
+            if (typeof value !== 'boolean') return `字段 "${fieldName}" 期望 bool，实际 ${typeof value}`;
+        }
+        // Integer types
+        else if (['int32', 'int64', 'uint32', 'uint64', 'sint32', 'sint64', 'enum'].includes(t)) {
+            if (typeof value !== 'number' || !Number.isInteger(value)) return `字段 "${fieldName}" 期望整数(${t})，实际 ${JSON.stringify(value)}`;
+        }
+        // Float/double
+        else if (['float', 'double', 'fixed32', 'fixed64', 'sfixed32', 'sfixed64'].includes(t)) {
+            if (typeof value !== 'number') return `字段 "${fieldName}" 期望数字(${t})，实际 ${typeof value}`;
+        }
+        // string
+        else if (t === 'string') {
+            if (typeof value !== 'string') return `字段 "${fieldName}" 期望 string，实际 ${typeof value}`;
+        }
+        // bytes
+        else if (t === 'bytes') {
+            if (!Array.isArray(value)) return `字段 "${fieldName}" 期望 bytes(数组)，实际 ${typeof value}`;
+        }
+
+        return null; // valid or unknown type, allow
     }
 
     function guessWireType(value, fieldDef) {
