@@ -1,0 +1,42 @@
+
+syntax = "proto3";
+
+message OrderItem {
+  int32 product_id = 1;
+  string product_name = 2;
+  int32 quantity = 3;
+  double price = 4;
+  string category = 5;
+}
+
+message Address {
+  string street = 1;
+  string city = 2;
+  string province = 3;
+  string zip_code = 4;
+  string country = 5;
+  string phone = 6;
+}
+
+message Order {
+  int64 order_id = 1;
+  string user_name = 2;
+  string email = 3;
+  Address shipping_address = 4;
+  Address billing_address = 5;
+  repeated OrderItem items = 6;
+  double total_amount = 7;
+  double discount = 8;
+  double shipping_fee = 9;
+  string payment_method = 10;
+  string order_status = 11;
+  string created_at = 12;
+  string updated_at = 13;
+  string note = 14;
+  bool is_gift = 15;
+  string gift_message = 16;
+  string tracking_number = 17;
+  repeated string tags = 18;
+  string currency = 19;
+  string locale = 20;
+}

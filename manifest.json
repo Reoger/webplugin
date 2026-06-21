@@ -3,6 +3,8 @@
   "name": "PB Converter - Protocol Buffer 双向转换器",
   "version": "1.0.0",
   "description": "支持 pb ↔ JSON 双向转换的开发工具，保护隐私，数据不上传服务器",
+  "author": "luojie",
+  "homepage_url": "https://github.com/luojie",
   "permissions": [
     "storage"
   ],
